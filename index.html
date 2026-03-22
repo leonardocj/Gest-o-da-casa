@@ -757,63 +757,114 @@ async function saveData() {
   }, 600);
 }
 
+function setLoadingMsg(msg) {
+  const el = document.querySelector('#loading-screen p');
+  if (el) el.textContent = msg;
+}
+
+function showLoadingError(title, detail) {
+  document.getElementById('loading-screen').innerHTML =
+    '<div style="text-align:center;padding:32px 24px;font-family:sans-serif;max-width:360px">' +
+    '<div style="font-size:32px;margin-bottom:12px">⚠️</div>' +
+    '<p style="font-size:15px;color:#B91C1C;font-weight:600;margin-bottom:8px">' + title + '</p>' +
+    '<p style="font-size:12px;color:#6B6560;margin-bottom:10px;line-height:1.5">' + detail + '</p>' +
+    '<button onclick="initFirebase()" style="padding:9px 22px;background:#1A5FA8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">Tentar novamente</button>' +
+    '</div>';
+}
+
+function showAppNow() {
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'flex';
+  document.getElementById('month-tabs-wrap').style.display = 'flex';
+}
+
+function sanitizeData(data) {
+  if (!data.nextId) data.nextId = {mensal:200, estoque:200, med:200};
+  if (!data.months || typeof data.months !== 'object') data.months = {};
+  if (!Array.isArray(data.estoque)) data.estoque = [];
+  if (!Array.isArray(data.med)) data.med = [];
+  if (Object.keys(data.months).length === 0) {
+    data.months[CURRENT_MONTH_KEY] = { label: 'Mar/26', budget: 1800, items: [] };
+  }
+  return data;
+}
+
 async function initFirebase() {
+  // Reset loading screen in case of retry
+  document.getElementById('loading-screen').innerHTML =
+    '<div class="spinner"></div><h2>Gestao Domestica</h2><p id="load-msg">Conectando...</p>';
+
+  function log(msg) {
+    const el = document.getElementById('load-msg');
+    if (el) el.textContent = msg;
+    console.log('[Firebase]', msg);
+  }
+
   try {
-    // Use Firebase compat SDK (loaded via <script> tags - no import needed)
-    firebase.initializeApp(firebaseConfig);
+    log('Carregando SDK...');
+
+    // Check Firebase SDK loaded
+    if (typeof firebase === 'undefined') {
+      throw new Error('SDK do Firebase nao carregou. Verifique sua conexao com a internet.');
+    }
+
+    log('Iniciando app...');
+    // Avoid duplicate app error on retry
+    let fbApp;
+    try {
+      fbApp = firebase.app();
+    } catch(e) {
+      fbApp = firebase.initializeApp(firebaseConfig);
+    }
+
+    log('Conectando ao banco...');
     db = firebase.firestore();
     DOC_REF = db.collection('app').doc('dados');
 
-    // Load existing data
-    const snap = await DOC_REF.get();
+    // Timeout wrapper — if Firestore takes > 10s, show error (likely rules blocking)
+    log('Buscando dados...');
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(
+        'Timeout: o Firestore demorou mais de 10s. Verifique as Regras do Firestore: va em Firebase Console > Firestore > Rules e publique: allow read, write: if true;'
+      )), 10000)
+    );
+
+    const snap = await Promise.race([DOC_REF.get(), timeoutPromise]);
+
     if (snap.exists) {
-      appData = snap.data();
-      if (!appData.nextId) appData.nextId = {mensal:200, estoque:200, med:200};
-      if (!appData.months) appData.months = {};
-      if (!appData.estoque) appData.estoque = [];
-      if (!appData.med) appData.med = [];
+      log('Dados encontrados, carregando...');
+      appData = sanitizeData(snap.data());
     } else {
-      // First run — write defaults
-      await DOC_REF.set(appData);
+      log('Primeiro acesso, salvando dados iniciais...');
+      appData = sanitizeData(appData);
+      await Promise.race([DOC_REF.set(appData), timeoutPromise]);
     }
 
-    // Ensure a valid month is selected
-    const monthKeys = Object.keys(appData.months);
-    if (monthKeys.length === 0) {
-      appData.months[CURRENT_MONTH_KEY] = { label: 'Mar/26', budget: 1800, items: [] };
-      await DOC_REF.set(appData);
-    }
+    // Ensure valid month
     if (!appData.months[currentMonthKey]) {
-      currentMonthKey = monthKeys[monthKeys.length - 1] || CURRENT_MONTH_KEY;
+      currentMonthKey = Object.keys(appData.months).pop() || CURRENT_MONTH_KEY;
     }
 
-    // Real-time listener for other devices
+    log('Ativando atualizacao em tempo real...');
     unsubscribe = DOC_REF.onSnapshot((snap) => {
       if (!snap.exists || isSyncing) return;
       const remote = snap.data();
       if (JSON.stringify(remote) !== JSON.stringify(appData)) {
-        appData = remote;
-        if (!appData.nextId) appData.nextId = {mensal:200, estoque:200, med:200};
+        appData = sanitizeData(remote);
         renderAll();
       }
     });
 
-    // Show app
-    document.getElementById('loading-screen').style.display = 'none';
-    document.getElementById('app-shell').style.display = 'flex';
-    document.getElementById('month-tabs-wrap').style.display = 'flex';
-
+    log('Pronto!');
+    showAppNow();
     renderAll();
 
   } catch(e) {
-    console.error('Firebase error:', e);
-    document.getElementById('loading-screen').innerHTML =
-      '<div style="text-align:center;padding:32px;font-family:sans-serif">' +
-      '<p style="font-size:15px;color:#B91C1C;font-weight:600;margin-bottom:8px">Erro ao conectar</p>' +
-      '<p style="font-size:12px;color:#6B6560;margin-bottom:6px">Verifique as regras do Firestore no console Firebase.</p>' +
-      '<p style="font-size:11px;color:#9C958E;background:#F9F8F6;padding:8px;border-radius:6px;word-break:break-all">' + e.message + '</p>' +
-      '<button onclick="initFirebase()" style="margin-top:16px;padding:8px 20px;background:#1A5FA8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px">Tentar novamente</button>' +
-      '</div>';
+    console.error('[Firebase error]', e);
+    showLoadingError(
+      'Erro ao conectar',
+      e.message || 'Erro desconhecido. Abra o console do navegador (F12) para mais detalhes.'
+    );
   }
 }
 
