@@ -1012,7 +1012,6 @@ function renderMensal() {
   const pct = Math.min(100,Math.round(spent/BUDGET*100));
   const remaining = BUDGET - spent;
 
-  const BUDGET = getBudget();
   document.getElementById('m-budget-val').textContent = fmt(BUDGET);
   document.getElementById('m-bar-limit').textContent = fmt(BUDGET) + ' limite';
   document.getElementById('m-total-val').textContent = fmt(listTotal);
