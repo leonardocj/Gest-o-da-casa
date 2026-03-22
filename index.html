@@ -274,7 +274,6 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 <aside class="sidebar">
   <div class="sidebar-logo">
     <h1>Gestão<br>Doméstica</h1>
-    <p>Família de 5 · Jundiaí, SP</p>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-label">Visualização</div>
@@ -529,6 +528,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
               <option>🌾 Grãos e Cereais</option><option>🥫 Enlatados</option><option>🥛 Laticínios</option>
               <option>🧂 Temperos</option><option>💧 Água</option><option>🍪 Biscoitos</option>
               <option>🥜 Oleaginosas</option><option>🍯 Conservas</option>
+              <option>🧴 Higiene</option><option>🧹 Limpeza</option>
             </select>
           </div>
           <div class="form-group"><label class="form-label">Quantidade</label><input class="form-input" id="e-qtd" placeholder="Ex: 3 kg"></div>
@@ -664,6 +664,7 @@ function defaultData() {
       [mk]: {
         label: 'Mar/26',
         budget: 1800,
+        order: 0,
         items: [
           {id:1,nome:'Frango coxa/sobrecoxa',cat:'🥩 Proteínas',qtd:'6 kg',preco:12,un:6,checked:false,recurring:false},
           {id:2,nome:'Carne moída patinho',cat:'🥩 Proteínas',qtd:'1 kg',preco:28,un:3,checked:false,recurring:false},
@@ -859,10 +860,9 @@ async function initFirebase() {
       await Promise.race([DOC_REF.set(appData), timeoutPromise]);
     }
 
-    // Ensure valid month
-    if (!appData.months[currentMonthKey]) {
-      currentMonthKey = Object.keys(appData.months).pop() || CURRENT_MONTH_KEY;
-    }
+    // Auto-select most recent month (last in sorted order)
+    const allKeys = sortedMonthKeys();
+    currentMonthKey = allKeys[allKeys.length - 1] || CURRENT_MONTH_KEY;
 
     log('Ativando atualizacao em tempo real...');
     unsubscribe = DOC_REF.onSnapshot((snap) => {
@@ -911,7 +911,14 @@ function expBadge(dateStr) {
 }
 
 function destroyChart(key) { if(charts[key]){charts[key].destroy();delete charts[key];} }
-function sortedMonthKeys() { return Object.keys(appData.months); }
+function sortedMonthKeys() {
+  return Object.keys(appData.months).sort((a, b) => {
+    const oa = appData.months[a].order !== undefined ? appData.months[a].order : a;
+    const ob = appData.months[b].order !== undefined ? appData.months[b].order : b;
+    if (typeof oa === 'number' && typeof ob === 'number') return oa - ob;
+    return String(oa).localeCompare(String(ob));
+  });
+}
 function currentMonthItems() { return (appData.months[currentMonthKey] || {items:[]}).items; }
 
 // ── MONTH TABS ──
@@ -1270,7 +1277,8 @@ function createMonth() {
     newItems = appData.months[copyFrom].items.map(i=>({...i, id: appData.nextId.mensal++, checked: false}));
   }
   const srcBudget = (copyFrom && appData.months[copyFrom]) ? (appData.months[copyFrom].budget || 1800) : 1800;
-  appData.months[key] = { label, budget: srcBudget, items: newItems };
+  const nextOrder = sortedMonthKeys().length;
+  appData.months[key] = { label, budget: srcBudget, order: nextOrder, items: newItems };
   saveData();
   closeMonthModal();
   currentMonthKey = key;
