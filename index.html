@@ -258,6 +258,8 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div id="loading-screen">
@@ -641,7 +643,7 @@ const firebaseConfig = {
   appId: "1:392035720115:web:274b3404bddd01a5d4c9c6"
 };
 
-let db, DOC_REF, setDoc, onSnapshot;
+let db, DOC_REF;
 
 // ── CONSTANTS ──
 function getBudget() { return (appData.months[currentMonthKey] && appData.months[currentMonthKey].budget) ? appData.months[currentMonthKey].budget : 1800; }
@@ -742,48 +744,53 @@ async function saveData() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
-      await setDoc(DOC_REF, appData);
+      if (!DOC_REF) return;
+      isSyncing = true;
+      await DOC_REF.set(appData);
+      isSyncing = false;
       showSync('saved');
     } catch(e) {
+      isSyncing = false;
       console.error('Erro ao salvar:', e);
       showSync('');
     }
-  }, 600); // debounce 600ms to batch rapid changes
+  }, 600);
 }
 
 async function initFirebase() {
   try {
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js");
-    const fb = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
-    const { getFirestore, doc, getDoc } = fb;
-    setDoc = fb.setDoc;
-    onSnapshot = fb.onSnapshot;
+    // Use Firebase compat SDK (loaded via <script> tags - no import needed)
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    DOC_REF = db.collection('app').doc('dados');
 
-    const fbApp = initializeApp(firebaseConfig);
-    db = getFirestore(fbApp);
-    DOC_REF = doc(db, 'app', 'dados');
-
-    // Try to load existing data
-    const snap = await getDoc(DOC_REF);
-    if (snap.exists()) {
+    // Load existing data
+    const snap = await DOC_REF.get();
+    if (snap.exists) {
       appData = snap.data();
-      // Ensure nextId exists (migration safety)
       if (!appData.nextId) appData.nextId = {mensal:200, estoque:200, med:200};
+      if (!appData.months) appData.months = {};
+      if (!appData.estoque) appData.estoque = [];
+      if (!appData.med) appData.med = [];
     } else {
-      // First run — save defaults to Firebase
-      await setDoc(DOC_REF, appData);
+      // First run — write defaults
+      await DOC_REF.set(appData);
     }
 
-    // Ensure current month exists
-    if (!appData.months[CURRENT_MONTH_KEY]) {
-      currentMonthKey = Object.keys(appData.months).pop() || CURRENT_MONTH_KEY;
+    // Ensure a valid month is selected
+    const monthKeys = Object.keys(appData.months);
+    if (monthKeys.length === 0) {
+      appData.months[CURRENT_MONTH_KEY] = { label: 'Mar/26', budget: 1800, items: [] };
+      await DOC_REF.set(appData);
+    }
+    if (!appData.months[currentMonthKey]) {
+      currentMonthKey = monthKeys[monthKeys.length - 1] || CURRENT_MONTH_KEY;
     }
 
-    // Listen for real-time changes from other devices
-    unsubscribe = onSnapshot(DOC_REF, (snap) => {
-      if (!snap.exists() || isSyncing) return;
+    // Real-time listener for other devices
+    unsubscribe = DOC_REF.onSnapshot((snap) => {
+      if (!snap.exists || isSyncing) return;
       const remote = snap.data();
-      // Only update if data actually changed (avoid re-render loops)
       if (JSON.stringify(remote) !== JSON.stringify(appData)) {
         appData = remote;
         if (!appData.nextId) appData.nextId = {mensal:200, estoque:200, med:200};
@@ -801,7 +808,12 @@ async function initFirebase() {
   } catch(e) {
     console.error('Firebase error:', e);
     document.getElementById('loading-screen').innerHTML =
-      '<div style="text-align:center;padding:32px"><p style="font-size:14px;color:#B91C1C;font-weight:600">Erro ao conectar</p><p style="font-size:12px;color:#9C958E;margin-top:8px">Verifique as regras do Firestore no console do Firebase.</p><p style="font-size:11px;color:#9C958E;margin-top:4px">' + e.message + '</p></div>';
+      '<div style="text-align:center;padding:32px;font-family:sans-serif">' +
+      '<p style="font-size:15px;color:#B91C1C;font-weight:600;margin-bottom:8px">Erro ao conectar</p>' +
+      '<p style="font-size:12px;color:#6B6560;margin-bottom:6px">Verifique as regras do Firestore no console Firebase.</p>' +
+      '<p style="font-size:11px;color:#9C958E;background:#F9F8F6;padding:8px;border-radius:6px;word-break:break-all">' + e.message + '</p>' +
+      '<button onclick="initFirebase()" style="margin-top:16px;padding:8px 20px;background:#1A5FA8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px">Tentar novamente</button>' +
+      '</div>';
   }
 }
 
