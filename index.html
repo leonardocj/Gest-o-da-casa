@@ -329,8 +329,11 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
     <section class="section active" id="sec-mensal">
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-label">Orçamento</div>
-          <div class="metric-value blue">R$ 1.800</div>
+          <div class="metric-label" style="display:flex;align-items:center;justify-content:space-between">
+            Orçamento
+            <button onclick="openBudgetModal()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--blue);font-family:'Outfit',sans-serif;font-weight:600;padding:0">✎ editar</button>
+          </div>
+          <div class="metric-value blue" id="m-budget-val">R$ 1.800</div>
           <div class="metric-sub">mensal</div>
         </div>
         <div class="metric-card">
@@ -345,7 +348,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
         </div>
         <div class="metric-card">
           <div class="metric-label">Restante</div>
-          <div class="metric-value" id="m-remaining-val">R$ 1.800</div>
+          <div class="metric-value green" id="m-remaining-val">R$ 1.800</div>
           <div class="metric-sub">do orçamento</div>
         </div>
       </div>
@@ -356,7 +359,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
           <span class="progress-pct" id="m-pct">0%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="m-bar" style="width:0%"></div></div>
-        <div class="progress-labels"><span id="m-bar-spent">R$ 0 gastos</span><span>R$ 1.800 limite</span></div>
+        <div class="progress-labels"><span id="m-bar-spent">R$ 0 gastos</span><span id="m-bar-limit">R$ 1.800 limite</span></div>
       </div>
 
       <div id="recurring-notice" class="recurring-info" style="display:none">
@@ -641,7 +644,7 @@ const firebaseConfig = {
 let db, DOC_REF, setDoc, onSnapshot;
 
 // ── CONSTANTS ──
-const BUDGET = 1800;
+function getBudget() { return (appData.months[currentMonthKey] && appData.months[currentMonthKey].budget) ? appData.months[currentMonthKey].budget : 1800; }
 const COLORS = ['#1A5FA8','#2A7A3B','#B91C1C','#B45309','#6B3FA0','#0E7490','#92400E','#1D4ED8','#065F46'];
 const NOW = new Date();
 const CURRENT_MONTH_KEY = `${NOW.getFullYear()}-${String(NOW.getMonth()+1).padStart(2,'0')}`;
@@ -658,6 +661,7 @@ function defaultData() {
     months: {
       [mk]: {
         label: 'Mar/26',
+        budget: 1800,
         items: [
           {id:1,nome:'Frango coxa/sobrecoxa',cat:'🥩 Proteínas',qtd:'6 kg',preco:12,un:6,checked:false,recurring:false},
           {id:2,nome:'Carne moída patinho',cat:'🥩 Proteínas',qtd:'1 kg',preco:28,un:3,checked:false,recurring:false},
@@ -941,9 +945,13 @@ function renderMensal() {
   const listTotal = allItems.reduce((s,i)=>s+i.preco*i.un,0);
   const spent = allItems.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
   const checked = allItems.filter(i=>i.checked).length;
+  const BUDGET = getBudget();
   const pct = Math.min(100,Math.round(spent/BUDGET*100));
   const remaining = BUDGET - spent;
 
+  const BUDGET = getBudget();
+  document.getElementById('m-budget-val').textContent = fmt(BUDGET);
+  document.getElementById('m-bar-limit').textContent = fmt(BUDGET) + ' limite';
   document.getElementById('m-total-val').textContent = fmt(listTotal);
   document.getElementById('m-spent-val').textContent = fmt(spent);
   document.getElementById('m-checked-sub').textContent = `${checked} de ${allItems.length} itens`;
@@ -1180,7 +1188,8 @@ function createMonth() {
   if(copyFrom && appData.months[copyFrom]) {
     newItems = appData.months[copyFrom].items.map(i=>({...i, id: appData.nextId.mensal++, checked: false}));
   }
-  appData.months[key] = { label, items: newItems };
+  const srcBudget = (copyFrom && appData.months[copyFrom]) ? (appData.months[copyFrom].budget || 1800) : 1800;
+  appData.months[key] = { label, budget: srcBudget, items: newItems };
   saveData();
   closeMonthModal();
   currentMonthKey = key;
@@ -1335,10 +1344,71 @@ function saveItem(){
   closeModal();
 }
 
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeModal();closeMonthModal();closeRenameModal();} });
+
+// ── BUDGET MODAL ──
+function openBudgetModal() {
+  const current = getBudget();
+  document.getElementById('budget-input').value = current;
+  document.getElementById('budget-modal-month-label').textContent = monthLabel(currentMonthKey);
+  document.getElementById('budget-modal-overlay').classList.add('open');
+  setTimeout(() => {
+    const inp = document.getElementById('budget-input');
+    inp.focus();
+    inp.select();
+  }, 80);
+}
+
+function closeBudgetModal() {
+  document.getElementById('budget-modal-overlay').classList.remove('open');
+}
+
+function setBudgetPreset(val) {
+  document.getElementById('budget-input').value = val;
+}
+
+function saveBudget() {
+  const val = parseFloat(document.getElementById('budget-input').value);
+  if (!val || val <= 0) return;
+  if (!appData.months[currentMonthKey]) return;
+  appData.months[currentMonthKey].budget = val;
+  saveData();
+  closeBudgetModal();
+  renderMensal();
+}
+
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeModal();closeMonthModal();closeRenameModal();closeBudgetModal();} });
 
 // ── START ──
 initFirebase();
 </script>
+
+<!-- MODAL BUDGET -->
+<div class="modal-overlay" id="budget-modal-overlay" onclick="if(event.target===this)closeBudgetModal()">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <h3>Orçamento do mês</h3>
+      <button class="modal-close" onclick="closeBudgetModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Orçamento (R$)</label>
+        <input class="form-input" id="budget-input" type="number" min="0" step="50" placeholder="1800">
+        <p style="font-size:11px;color:var(--text3);margin-top:6px">Este valor vale apenas para <strong id="budget-modal-month-label"></strong>. Cada mês pode ter seu próprio orçamento.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px">
+        <button class="btn btn-sm" style="justify-content:center" onclick="setBudgetPreset(1000)">R$ 1.000</button>
+        <button class="btn btn-sm" style="justify-content:center" onclick="setBudgetPreset(1500)">R$ 1.500</button>
+        <button class="btn btn-sm" style="justify-content:center" onclick="setBudgetPreset(1800)">R$ 1.800</button>
+        <button class="btn btn-sm" style="justify-content:center" onclick="setBudgetPreset(2000)">R$ 2.000</button>
+        <button class="btn btn-sm" style="justify-content:center" onclick="setBudgetPreset(2500)">R$ 2.500</button>
+        <button class="btn btn-sm" style="justify-content:center" onclick="setBudgetPreset(3000)">R$ 3.000</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeBudgetModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveBudget()">Salvar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
