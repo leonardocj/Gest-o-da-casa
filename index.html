@@ -8,6 +8,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fraunces:ital,wght@0,300;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
+#loading-screen{position:fixed;inset:0;background:#F4F2EE;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+#loading-screen h2{font-family:'Fraunces',serif;font-size:22px;font-weight:700;color:#1C1917}
+#loading-screen p{font-size:13px;color:#9C958E}
+.spinner{width:36px;height:36px;border:3px solid #E5E1D8;border-top-color:#1A5FA8;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#sync-indicator{position:fixed;bottom:90px;right:18px;background:#fff;border:1px solid #E5E1D8;border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:#9C958E;display:none;align-items:center;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);z-index:400}
+#sync-indicator.saving{display:flex;color:#B45309}
+#sync-indicator.saved{display:flex;color:#2A7A3B}
+@media(min-width:901px){#sync-indicator{bottom:20px}}
+</style>
+<style>
 :root {
   --bg: #F4F2EE;
   --surface: #FFFFFF;
@@ -249,7 +260,13 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 </style>
 </head>
 <body>
-<div class="app-shell">
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <h2>Gestao Domestica</h2>
+  <p>Conectando ao banco de dados...</p>
+</div>
+<div id="sync-indicator"><span id="sync-text">Salvando...</span></div>
+<div class="app-shell" style="display:none" id="app-shell">
 
 <!-- SIDEBAR -->
 <aside class="sidebar">
@@ -450,7 +467,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 
   </div><!-- /content -->
 </div><!-- /main -->
-</div><!-- /app-shell -->
+</div><!-- /app-shell (original) -->
 
 <!-- MOBILE NAV -->
 <nav class="mobile-nav">
@@ -610,7 +627,25 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
   </div>
 </div>
 
-<script>
+<script type="module">
+// ── FIREBASE ──
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDlnfBDvz4syAgTYLZWS8NtTNih9qWUVCs",
+  authDomain: "gestao-domestica-41845.firebaseapp.com",
+  projectId: "gestao-domestica-41845",
+  storageBucket: "gestao-domestica-41845.firebasestorage.app",
+  messagingSenderId: "392035720115",
+  appId: "1:392035720115:web:274b3404bddd01a5d4c9c6"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+const DOC_REF = doc(db, 'app', 'dados');
+
+// ── CONSTANTS ──
 const BUDGET = 1800;
 const COLORS = ['#1A5FA8','#2A7A3B','#B91C1C','#B45309','#6B3FA0','#0E7490','#92400E','#1D4ED8','#065F46'];
 const NOW = new Date();
@@ -619,12 +654,9 @@ const CURRENT_MONTH_KEY = `${NOW.getFullYear()}-${String(NOW.getMonth()+1).padSt
 function monthLabel(key) {
   return (appData.months[key] && appData.months[key].label) ? appData.months[key].label : key;
 }
+function monthLabelFull(key) { return monthLabel(key); }
 
-function monthLabelFull(key) {
-  return monthLabel(key);
-}
-
-// ── DATA ──
+// ── DEFAULT DATA ──
 function defaultData() {
   const mk = CURRENT_MONTH_KEY;
   return {
@@ -688,31 +720,91 @@ function defaultData() {
   };
 }
 
-function loadData() {
-  try {
-    const d = localStorage.getItem('gestao_v3');
-    if (d) return JSON.parse(d);
-  } catch(e) {}
-  return defaultData();
-}
-
-let appData = loadData();
+// ── FIREBASE SYNC ──
+let appData = defaultData();
 let currentSection = 'mensal';
 let currentMonthKey = CURRENT_MONTH_KEY;
 let charts = {};
 let showRecurring = false;
+let isSyncing = false;
+let saveTimer = null;
+let unsubscribe = null;
 
-// ensure current month exists
-if (!appData.months[CURRENT_MONTH_KEY]) {
-  const now = new Date();
-  const defaultLabel = now.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('. ','/').replace('.','');
-  appData.months[CURRENT_MONTH_KEY] = { label: defaultLabel, items: [] };
+function showSync(state) {
+  const el = document.getElementById('sync-indicator');
+  const txt = document.getElementById('sync-text');
+  el.className = state;
+  txt.textContent = state === 'saving' ? '↑ Salvando...' : '✓ Salvo';
+  if (state === 'saved') setTimeout(() => { el.className = ''; }, 2000);
 }
 
-function saveData() {
-  try { localStorage.setItem('gestao_v3', JSON.stringify(appData)); } catch(e) {}
+async function saveData() {
+  showSync('saving');
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      await setDoc(DOC_REF, appData);
+      showSync('saved');
+    } catch(e) {
+      console.error('Erro ao salvar:', e);
+      showSync('');
+    }
+  }, 600); // debounce 600ms to batch rapid changes
 }
 
+async function initFirebase() {
+  try {
+    // Try to load existing data
+    const snap = await getDoc(DOC_REF);
+    if (snap.exists()) {
+      appData = snap.data();
+      // Ensure nextId exists (migration safety)
+      if (!appData.nextId) appData.nextId = {mensal:200, estoque:200, med:200};
+    } else {
+      // First run — save defaults to Firebase
+      await setDoc(DOC_REF, appData);
+    }
+
+    // Ensure current month exists
+    if (!appData.months[CURRENT_MONTH_KEY]) {
+      currentMonthKey = Object.keys(appData.months).pop() || CURRENT_MONTH_KEY;
+    }
+
+    // Listen for real-time changes from other devices
+    unsubscribe = onSnapshot(DOC_REF, (snap) => {
+      if (!snap.exists() || isSyncing) return;
+      const remote = snap.data();
+      // Only update if data actually changed (avoid re-render loops)
+      if (JSON.stringify(remote) !== JSON.stringify(appData)) {
+        appData = remote;
+        if (!appData.nextId) appData.nextId = {mensal:200, estoque:200, med:200};
+        renderAll();
+      }
+    });
+
+    // Show app
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('app-shell').style.display = 'flex';
+    document.getElementById('month-tabs-wrap').style.display = 'flex';
+
+    renderAll();
+
+  } catch(e) {
+    console.error('Firebase error:', e);
+    document.getElementById('loading-screen').innerHTML =
+      '<div style="text-align:center;padding:32px"><p style="font-size:14px;color:#B91C1C;font-weight:600">Erro ao conectar</p><p style="font-size:12px;color:#9C958E;margin-top:8px">Verifique as regras do Firestore no console do Firebase.</p><p style="font-size:11px;color:#9C958E;margin-top:4px">' + e.message + '</p></div>';
+  }
+}
+
+function renderAll() {
+  renderMonthTabs();
+  renderMensal();
+  renderEstoque();
+  renderMed();
+  if (currentSection === 'gastos') renderGastos();
+}
+
+// ── HELPERS ──
 function fmt(v) { return 'R$ ' + Math.round(Number(v)).toLocaleString('pt-BR'); }
 function fmtDec(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function daysUntil(dateStr) { if(!dateStr) return 9999; return Math.ceil((new Date(dateStr)-new Date())/86400000); }
@@ -728,19 +820,13 @@ function expBadge(dateStr) {
 }
 
 function destroyChart(key) { if(charts[key]){charts[key].destroy();delete charts[key];} }
-
-function sortedMonthKeys() {
-  // Keys are now timestamp-based (month_XXXXXX) — preserve insertion order
-  return Object.keys(appData.months);
-}
-
-function currentMonthItems() {
-  return (appData.months[currentMonthKey] || {items:[]}).items;
-}
+function sortedMonthKeys() { return Object.keys(appData.months); }
+function currentMonthItems() { return (appData.months[currentMonthKey] || {items:[]}).items; }
 
 // ── MONTH TABS ──
 function renderMonthTabs() {
   const keys = sortedMonthKeys();
+  if (!keys.includes(currentMonthKey)) currentMonthKey = keys[keys.length - 1] || CURRENT_MONTH_KEY;
   const wrap = document.getElementById('month-tabs-inner');
   wrap.innerHTML = keys.map(k => {
     const isSelected = k === currentMonthKey;
@@ -774,10 +860,8 @@ function switchSection(sec, el, isMobile) {
     document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   }
   el.classList.add('active');
-
   const hasTabs = (sec==='mensal'||sec==='gastos');
   document.getElementById('month-tabs-wrap').style.display = hasTabs ? 'flex' : 'none';
-
   const titles = {
     mensal:['Compras Mensais', monthLabelFull(currentMonthKey)],
     estoque:['Estoque de Alimentos','Reserva de emergência'],
@@ -786,7 +870,6 @@ function switchSection(sec, el, isMobile) {
   };
   document.getElementById('topbar-title').textContent = titles[sec][0];
   document.getElementById('topbar-sub').textContent = titles[sec][1];
-
   if(sec==='gastos') renderGastos();
 }
 
@@ -807,30 +890,20 @@ function renderMensal() {
   const recurringItems = items.filter(i=>i.recurring);
   const nonRecurring = items.filter(i=>!i.recurring);
   const visibleItems = showRecurring ? items : nonRecurring;
-
   const cats = {};
-  visibleItems.forEach(it=>{
-    if(!cats[it.cat]) cats[it.cat]=[];
-    cats[it.cat].push(it);
-  });
+  visibleItems.forEach(it=>{ if(!cats[it.cat]) cats[it.cat]=[]; cats[it.cat].push(it); });
 
-  // Recurring notice
   const rNotice = document.getElementById('recurring-notice');
   const rText = document.getElementById('recurring-notice-text');
   if(recurringItems.length && !showRecurring) {
     rNotice.style.display = 'flex';
-    const names = recurringItems.map(i=>i.nome).join(', ');
-    rText.textContent = `${recurringItems.length} item(s) permanente(s) oculto(s) (já disponível): ${names}. `;
+    rText.textContent = `${recurringItems.length} item(s) permanente(s) oculto(s): ${recurringItems.map(i=>i.nome).join(', ')}.`;
     document.getElementById('show-recurring-btn').style.display = 'inline-flex';
     document.getElementById('show-recurring-btn').textContent = 'Mostrar permanentes';
   } else {
     rNotice.style.display = 'none';
-    if(recurringItems.length) {
-      document.getElementById('show-recurring-btn').style.display = 'inline-flex';
-      document.getElementById('show-recurring-btn').textContent = 'Ocultar permanentes';
-    } else {
-      document.getElementById('show-recurring-btn').style.display = 'none';
-    }
+    document.getElementById('show-recurring-btn').style.display = recurringItems.length ? 'inline-flex' : 'none';
+    if(recurringItems.length) document.getElementById('show-recurring-btn').textContent = 'Ocultar permanentes';
   }
 
   let html = '';
@@ -879,9 +952,8 @@ function renderMensal() {
   document.getElementById('badge-mensal').textContent = allItems.length;
   document.getElementById('sb-mensal').textContent = allItems.length;
 
-  // cat summary (all items)
   const allCats = {};
-  allItems.forEach(it=>{if(!allCats[it.cat])allCats[it.cat]=0;allCats[it.cat]+=it.preco*it.un;});
+  allItems.forEach(it=>{ if(!allCats[it.cat]) allCats[it.cat]=0; allCats[it.cat]+=it.preco*it.un; });
   let sumHtml = '';
   Object.entries(allCats).forEach(([cat,t])=>{
     const p = listTotal>0?Math.round(t/listTotal*100):0;
@@ -890,14 +962,12 @@ function renderMensal() {
   sumHtml += `<div class="summary-row total"><span class="summary-label">Total lista</span><span class="summary-val">${fmt(listTotal)}</span></div>`;
   document.getElementById('cat-summary').innerHTML = sumHtml;
 
-  // Chart
   destroyChart('mensal');
   if(allItems.length) {
     const labels = Object.keys(allCats).map(c=>c.replace(/^\S+\s/,''));
-    const vals = Object.values(allCats);
     charts.mensal = new Chart(document.getElementById('chartMensal'),{
       type:'doughnut',
-      data:{labels,datasets:[{data:vals,backgroundColor:COLORS.slice(0,labels.length),borderWidth:0}]},
+      data:{labels,datasets:[{data:Object.values(allCats),backgroundColor:COLORS.slice(0,labels.length),borderWidth:0}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10,family:'Outfit'},boxWidth:8,padding:6}}}}
     });
   }
@@ -905,23 +975,20 @@ function renderMensal() {
 
 function toggleMensal(id) {
   const it = currentMonthItems().find(i=>i.id===id);
-  if(it){it.checked=!it.checked;saveData();renderMensal();}
+  if(it){ it.checked=!it.checked; saveData(); renderMensal(); }
 }
-
 function delMensal(id) {
   const month = appData.months[currentMonthKey];
   month.items.splice(month.items.findIndex(i=>i.id===id),1);
-  saveData();renderMensal();
+  saveData(); renderMensal();
 }
-
-function checkAll() { currentMonthItems().forEach(i=>i.checked=true); saveData();renderMensal(); }
-function uncheckAll() { currentMonthItems().forEach(i=>i.checked=false); saveData();renderMensal(); }
+function checkAll() { currentMonthItems().forEach(i=>i.checked=true); saveData(); renderMensal(); }
+function uncheckAll() { currentMonthItems().forEach(i=>i.checked=false); saveData(); renderMensal(); }
 
 // ── RENDER ESTOQUE ──
 function renderEstoque() {
   const cats = {};
-  appData.estoque.forEach(it=>{if(!cats[it.cat])cats[it.cat]=[];cats[it.cat].push(it);});
-
+  appData.estoque.forEach(it=>{ if(!cats[it.cat]) cats[it.cat]=[]; cats[it.cat].push(it); });
   let html='';
   if(!appData.estoque.length) {
     html='<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">Nenhum item</div><div class="empty-sub">Clique em + para adicionar</div></div>';
@@ -934,10 +1001,7 @@ function renderEstoque() {
           <div class="stock-item-header" onclick="toggleStock(${it.id})">
             <div class="stock-info">
               <div class="stock-name">${it.nome}</div>
-              <div class="stock-meta">
-                <span class="badge badge-blue">${it.un} un. · ${fmt(tv)}</span>
-                ${expBadge(it.vence)}
-              </div>
+              <div class="stock-meta"><span class="badge badge-blue">${it.un} un. · ${fmt(tv)}</span>${expBadge(it.vence)}</div>
             </div>
             <div style="display:flex;gap:5px;align-items:center">
               <button class="btn btn-xs btn-edit" onclick="event.stopPropagation();editEstoque(${it.id})">✎</button>
@@ -963,16 +1027,14 @@ function renderEstoque() {
   document.getElementById('items-estoque').innerHTML = html;
 
   const totalE=appData.estoque.reduce((s,i)=>s+i.preco*i.un,0);
-  const expC=appData.estoque.filter(i=>daysUntil(i.vence)<90).length;
-  const catsC=new Set(appData.estoque.map(i=>i.cat)).size;
   document.getElementById('e-total-val').textContent=fmt(totalE);
   document.getElementById('e-count-val').textContent=appData.estoque.length;
-  document.getElementById('e-exp-val').textContent=expC;
-  document.getElementById('e-cats-val').textContent=catsC;
+  document.getElementById('e-exp-val').textContent=appData.estoque.filter(i=>daysUntil(i.vence)<90).length;
+  document.getElementById('e-cats-val').textContent=new Set(appData.estoque.map(i=>i.cat)).size;
   document.getElementById('badge-estoque').textContent=appData.estoque.length;
   document.getElementById('sb-estoque').textContent=appData.estoque.length;
 
-  destroyChart('estoque');destroyChart('validade');
+  destroyChart('estoque'); destroyChart('validade');
   if(appData.estoque.length) {
     const cl=Object.keys(cats).map(c=>c.replace(/^\S+\s/,''));
     const cv=Object.values(cats).map(items=>items.reduce((s,i)=>s+i.preco*i.un,0));
@@ -987,9 +1049,9 @@ function renderEstoque() {
 function toggleStock(id){
   const el=document.getElementById('exp-'+id),arr=document.getElementById('arr-'+id);
   const open=el.classList.contains('open');
-  el.classList.toggle('open',!open);arr.classList.toggle('open',!open);
+  el.classList.toggle('open',!open); arr.classList.toggle('open',!open);
 }
-function delEstoque(id){appData.estoque.splice(appData.estoque.findIndex(i=>i.id===id),1);saveData();renderEstoque();}
+function delEstoque(id){ appData.estoque.splice(appData.estoque.findIndex(i=>i.id===id),1); saveData(); renderEstoque(); }
 
 // ── RENDER MED ──
 function renderMed() {
@@ -1017,46 +1079,38 @@ function renderMed() {
   document.getElementById('items-med').innerHTML=html;
   const totalM=appData.med.reduce((s,i)=>s+i.preco,0);
   const chM=appData.med.filter(i=>i.checked).length;
-  const expM=appData.med.filter(i=>daysUntil(i.vence)<90).length;
   document.getElementById('med-total-val').textContent=fmt(totalM);
   document.getElementById('med-count-val').textContent=appData.med.length;
   document.getElementById('med-checked-val').textContent=chM;
-  document.getElementById('med-exp-val').textContent=expM;
+  document.getElementById('med-exp-val').textContent=appData.med.filter(i=>daysUntil(i.vence)<90).length;
   document.getElementById('badge-med').textContent=appData.med.length;
   document.getElementById('sb-med').textContent=appData.med.length;
 }
 
-function toggleMed(id){const it=appData.med.find(i=>i.id===id);if(it){it.checked=!it.checked;saveData();renderMed();}}
-function delMed(id){appData.med.splice(appData.med.findIndex(i=>i.id===id),1);saveData();renderMed();}
+function toggleMed(id){ const it=appData.med.find(i=>i.id===id); if(it){it.checked=!it.checked;saveData();renderMed();} }
+function delMed(id){ appData.med.splice(appData.med.findIndex(i=>i.id===id),1); saveData(); renderMed(); }
 
 // ── RENDER GASTOS ──
 function renderGastos() {
   const keys = sortedMonthKeys();
-
-  // comparison cards
   let compareHtml = '<div class="compare-grid">';
   keys.forEach(k=>{
     const items = appData.months[k].items;
     const total = items.reduce((s,i)=>s+i.preco*i.un,0);
     const spent = items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
     const isSel = k===currentMonthKey;
-    const isCur = k===CURRENT_MONTH_KEY;
-
     let diffHtml = '';
     const idx = keys.indexOf(k);
     if(idx>0) {
-      const prevItems = appData.months[keys[idx-1]].items;
-      const prevSpent = prevItems.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
+      const prevSpent = appData.months[keys[idx-1]].items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
       if(prevSpent>0) {
         const diff = Math.round((spent-prevSpent)/prevSpent*100);
         const cls = diff>0?'compare-up':diff<0?'compare-down':'compare-same';
-        const arrow = diff>0?'↑':diff<0?'↓':'→';
-        diffHtml = `<span class="compare-badge ${cls}">${arrow} ${Math.abs(diff)}% vs mês anterior</span>`;
+        diffHtml = `<span class="compare-badge ${cls}">${diff>0?'↑':diff<0?'↓':'→'} ${Math.abs(diff)}% vs anterior</span>`;
       }
     }
-
     compareHtml += `<div class="compare-card${isSel?' highlight':''}">
-      <div class="compare-month">${monthLabelFull(k)}${isCur?' · atual':''}</div>
+      <div class="compare-month">${monthLabelFull(k)}</div>
       <div class="compare-val">${fmt(spent)}</div>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">de ${fmt(total)} previstos</div>
       ${diffHtml}
@@ -1065,50 +1119,34 @@ function renderGastos() {
   compareHtml += '</div>';
   document.getElementById('compare-grid-wrap').innerHTML = compareHtml;
 
-  // bar chart comparing months
   destroyChart('compare');
-  if(keys.length>0) {
-    const compLabels = keys.map(k=>monthLabel(k));
-    const compVals = keys.map(k=>{
-      const its = appData.months[k].items;
-      return its.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
-    });
-    const compColors = keys.map(k=>k===currentMonthKey?'#1A5FA8':'#B5D4F4');
+  if(keys.length) {
     charts.compare = new Chart(document.getElementById('chartCompare'),{
       type:'bar',
-      data:{labels:compLabels,datasets:[{data:compVals,backgroundColor:compColors,borderRadius:6,borderWidth:0}]},
+      data:{labels:keys.map(k=>monthLabel(k)),datasets:[{data:keys.map(k=>appData.months[k].items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0)),backgroundColor:keys.map(k=>k===currentMonthKey?'#1A5FA8':'#B5D4F4'),borderRadius:6,borderWidth:0}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v),font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}},x:{ticks:{font:{size:11}},grid:{display:false}}}}
     });
   }
 
-  // current month breakdown
   const selItems = currentMonthItems();
   const mensalGasto = selItems.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
   const estoqueTotal = appData.estoque.reduce((s,i)=>s+i.preco*i.un,0);
   const medTotal = appData.med.reduce((s,i)=>s+i.preco,0);
   const totalG = mensalGasto+estoqueTotal+medTotal;
-
   document.getElementById('g-mensal').textContent=fmt(mensalGasto);
   document.getElementById('g-estoque').textContent=fmt(estoqueTotal);
   document.getElementById('g-med').textContent=fmt(medTotal);
   document.getElementById('g-total').textContent=fmt(totalG);
 
-  destroyChart('gastos');destroyChart('cats');
-
-  if(totalG>0) {
-    charts.gastos=new Chart(document.getElementById('chartGastos'),{type:'doughnut',data:{labels:['Mensal comprado','Estoque','Medicamentos'],datasets:[{data:[mensalGasto,estoqueTotal,medTotal],backgroundColor:['#1A5FA8','#2A7A3B','#B91C1C'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:8,padding:6}}}}});
-  }
+  destroyChart('gastos'); destroyChart('cats');
+  if(totalG>0) charts.gastos=new Chart(document.getElementById('chartGastos'),{type:'doughnut',data:{labels:['Mensal comprado','Estoque','Medicamentos'],datasets:[{data:[mensalGasto,estoqueTotal,medTotal],backgroundColor:['#1A5FA8','#2A7A3B','#B91C1C'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:8,padding:6}}}}});
 
   const catGroups={};
-  selItems.forEach(it=>{const c=it.cat;if(!catGroups[c])catGroups[c]=0;catGroups[c]+=it.preco*it.un;});
-  if(Object.keys(catGroups).length) {
-    charts.cats=new Chart(document.getElementById('chartCats'),{type:'bar',data:{labels:Object.keys(catGroups).map(c=>c.replace(/^\S+\s/,'')),datasets:[{data:Object.values(catGroups),backgroundColor:COLORS.slice(0,Object.keys(catGroups).length),borderRadius:6,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v),font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}},x:{ticks:{font:{size:9}},grid:{display:false}}}}});
-  }
+  selItems.forEach(it=>{ if(!catGroups[it.cat])catGroups[it.cat]=0; catGroups[it.cat]+=it.preco*it.un; });
+  if(Object.keys(catGroups).length) charts.cats=new Chart(document.getElementById('chartCats'),{type:'bar',data:{labels:Object.keys(catGroups).map(c=>c.replace(/^\S+\s/,'')),datasets:[{data:Object.values(catGroups),backgroundColor:COLORS.slice(0,Object.keys(catGroups).length),borderRadius:6,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v),font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}},x:{ticks:{font:{size:9}},grid:{display:false}}}}});
 
   let sumHtml='';
-  Object.entries(catGroups).forEach(([cat,val])=>{
-    sumHtml+=`<div class="summary-row"><span class="summary-label">${cat}</span><span class="summary-val">${fmt(val)}</span></div>`;
-  });
+  Object.entries(catGroups).forEach(([cat,val])=>{ sumHtml+=`<div class="summary-row"><span class="summary-label">${cat}</span><span class="summary-val">${fmt(val)}</span></div>`; });
   sumHtml+=`<div class="summary-row"><span class="summary-label">📦 Estoque</span><span class="summary-val">${fmt(estoqueTotal)}</span></div>`;
   sumHtml+=`<div class="summary-row"><span class="summary-label">💊 Medicamentos</span><span class="summary-val">${fmt(medTotal)}</span></div>`;
   sumHtml+=`<div class="summary-row total"><span class="summary-label">Total geral</span><span class="summary-val">${fmt(totalG)}</span></div>`;
@@ -1118,12 +1156,10 @@ function renderGastos() {
 // ── NEW MONTH ──
 function openNewMonthModal() {
   document.getElementById('new-month-label').value = '';
-  // populate copy-from with existing months
   const keys = sortedMonthKeys();
   const sel = document.getElementById('month-copy-from');
   sel.innerHTML = '<option value="">&#8212; Lista vazia &#8212;</option>' +
     keys.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join('');
-  // default: copy from most recent
   if(keys.length) sel.value = keys[keys.length-1];
   document.getElementById('month-modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('new-month-label').focus(), 80);
@@ -1133,21 +1169,12 @@ function closeMonthModal() { document.getElementById('month-modal-overlay').clas
 function createMonth() {
   const label = document.getElementById('new-month-label').value.trim();
   if(!label) { document.getElementById('new-month-label').focus(); return; }
-
-  // generate a unique internal key (timestamp-based, never shown to user)
   const key = 'month_' + Date.now();
-
   const copyFrom = document.getElementById('month-copy-from').value;
   let newItems = [];
   if(copyFrom && appData.months[copyFrom]) {
-    // copy ALL items, reset checks
-    newItems = appData.months[copyFrom].items.map(i=>({
-      ...i,
-      id: appData.nextId.mensal++,
-      checked: false
-    }));
+    newItems = appData.months[copyFrom].items.map(i=>({...i, id: appData.nextId.mensal++, checked: false}));
   }
-
   appData.months[key] = { label, items: newItems };
   saveData();
   closeMonthModal();
@@ -1194,10 +1221,9 @@ function confirmDeleteMonth() {
   saveData();
   closeRenameModal();
   const remaining = sortedMonthKeys();
-  currentMonthKey = remaining[Math.min(idx, remaining.length - 1)];
-  renderMonthTabs();
-  renderMensal();
-  if(currentSection === 'gastos') renderGastos();
+  currentMonthKey = remaining[Math.min(idx, remaining.length-1)];
+  renderMonthTabs(); renderMensal();
+  if(currentSection==='gastos') renderGastos();
 }
 
 function deleteCurrentMonth() { showDeleteConfirm(); }
@@ -1212,7 +1238,7 @@ function saveRename() {
   if(currentSection==='gastos') renderGastos();
 }
 
-// ── MODAL ──
+// ── MODAL ITEM ──
 let editMode=false, editType=null, editId=null;
 
 function openModal(type, id) {
@@ -1276,79 +1302,38 @@ function editMed(id){openModal('med',id);}
 
 function closeModal(){
   document.getElementById('modal-overlay').classList.remove('open');
-  editMode=false;editType=null;editId=null;
+  editMode=false; editType=null; editId=null;
 }
 
 function saveItem(){
   const tab=editType||(currentSection==='gastos'?'mensal':currentSection);
-
   if(tab==='mensal'){
     const nome=document.getElementById('f-nome').value.trim(); if(!nome)return;
-    const payload={
-      nome, cat:document.getElementById('f-cat').value,
-      qtd:document.getElementById('f-qtd').value||'1 un',
-      preco:parseFloat(document.getElementById('f-preco').value)||0,
-      un:parseInt(document.getElementById('f-un').value)||1,
-      recurring:document.getElementById('f-recurring').checked
-    };
+    const payload={nome,cat:document.getElementById('f-cat').value,qtd:document.getElementById('f-qtd').value||'1 un',preco:parseFloat(document.getElementById('f-preco').value)||0,un:parseInt(document.getElementById('f-un').value)||1,recurring:document.getElementById('f-recurring').checked};
     const month=appData.months[currentMonthKey];
-    if(editMode){
-      const idx=month.items.findIndex(i=>i.id===editId);
-      if(idx!==-1) month.items[idx]={...month.items[idx],...payload};
-    } else {
-      month.items.push({id:appData.nextId.mensal++,...payload,checked:false});
-    }
-    saveData();renderMensal();
-
+    if(editMode){ const idx=month.items.findIndex(i=>i.id===editId); if(idx!==-1) month.items[idx]={...month.items[idx],...payload}; }
+    else { month.items.push({id:appData.nextId.mensal++,...payload,checked:false}); }
+    saveData(); renderMensal();
   } else if(tab==='estoque'){
     const nome=document.getElementById('e-nome').value.trim(); if(!nome)return;
-    const payload={
-      nome, cat:document.getElementById('e-cat').value,
-      qtd:document.getElementById('e-qtd').value||'1 un',
-      preco:parseFloat(document.getElementById('e-preco').value)||0,
-      un:parseInt(document.getElementById('e-un').value)||1,
-      compra:document.getElementById('e-compra').value,
-      vence:document.getElementById('e-vence').value,
-      local:document.getElementById('e-local').value,
-      obs:document.getElementById('e-obs').value
-    };
-    if(editMode){
-      const idx=appData.estoque.findIndex(i=>i.id===editId);
-      if(idx!==-1) appData.estoque[idx]={...appData.estoque[idx],...payload};
-    } else {
-      appData.estoque.push({id:appData.nextId.estoque++,...payload});
-    }
-    saveData();renderEstoque();
-
+    const payload={nome,cat:document.getElementById('e-cat').value,qtd:document.getElementById('e-qtd').value||'1 un',preco:parseFloat(document.getElementById('e-preco').value)||0,un:parseInt(document.getElementById('e-un').value)||1,compra:document.getElementById('e-compra').value,vence:document.getElementById('e-vence').value,local:document.getElementById('e-local').value,obs:document.getElementById('e-obs').value};
+    if(editMode){ const idx=appData.estoque.findIndex(i=>i.id===editId); if(idx!==-1) appData.estoque[idx]={...appData.estoque[idx],...payload}; }
+    else { appData.estoque.push({id:appData.nextId.estoque++,...payload}); }
+    saveData(); renderEstoque();
   } else if(tab==='med'){
     const nome=document.getElementById('med-nome').value.trim(); if(!nome)return;
-    const payload={
-      nome, para:document.getElementById('med-para').value,
-      qtd:document.getElementById('med-qtd').value||'1 un',
-      preco:parseFloat(document.getElementById('med-preco').value)||0,
-      vence:document.getElementById('med-vence').value,
-      uso:document.getElementById('med-uso').value,
-      dose:document.getElementById('med-dose').value
-    };
-    if(editMode){
-      const idx=appData.med.findIndex(i=>i.id===editId);
-      if(idx!==-1) appData.med[idx]={...appData.med[idx],...payload};
-    } else {
-      appData.med.push({id:appData.nextId.med++,...payload,checked:false});
-    }
-    saveData();renderMed();
+    const payload={nome,para:document.getElementById('med-para').value,qtd:document.getElementById('med-qtd').value||'1 un',preco:parseFloat(document.getElementById('med-preco').value)||0,vence:document.getElementById('med-vence').value,uso:document.getElementById('med-uso').value,dose:document.getElementById('med-dose').value};
+    if(editMode){ const idx=appData.med.findIndex(i=>i.id===editId); if(idx!==-1) appData.med[idx]={...appData.med[idx],...payload}; }
+    else { appData.med.push({id:appData.nextId.med++,...payload,checked:false}); }
+    saveData(); renderMed();
   }
   closeModal();
 }
 
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeMonthModal();closeRenameModal();}});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeModal();closeMonthModal();closeRenameModal();} });
 
-// ── INIT ──
-renderMonthTabs();
-renderMensal();
-renderEstoque();
-renderMed();
-document.getElementById('month-tabs-wrap').style.display='flex';
+// ── START ──
+initFirebase();
 </script>
 </body>
 </html>
