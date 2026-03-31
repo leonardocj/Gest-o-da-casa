@@ -289,6 +289,10 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       <span class="nav-icon">💊</span> Medicamentos
       <span class="nav-badge" id="sb-med">0</span>
     </button>
+    <div class="nav-label" style="margin-top:8px">Finanças</div>
+    <button class="nav-item" onclick="switchSection('financeiro',this)">
+      <span class="nav-icon">💰</span> Gestão Financeira
+    </button>
     <div class="nav-label" style="margin-top:8px">Análise</div>
     <button class="nav-item" onclick="switchSection('gastos',this)">
       <span class="nav-icon">📊</span> Gastos & Comparação
@@ -303,7 +307,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
   <div class="mobile-header">
     <div class="mobile-header-inner">
       <div class="mobile-logo">Gestão <span>Doméstica</span></div>
-      <span style="font-size:11px;color:var(--text3)">Família de 5</span>
+
     </div>
   </div>
 
@@ -469,6 +473,103 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       </div>
     </section>
 
+
+    <!-- ── FINANCEIRO ── -->
+    <section class="section" id="sec-financeiro">
+
+      <!-- SUMMARY METRICS -->
+      <div class="metrics-grid" style="margin-bottom:16px">
+        <div class="metric-card">
+          <div class="metric-label">Receita total</div>
+          <div class="metric-value green" id="fin-receita">R$ 0</div>
+          <div class="metric-sub" id="fin-receita-sub">0 fontes</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Despesas fixas</div>
+          <div class="metric-value red" id="fin-fixas">R$ 0</div>
+          <div class="metric-sub" id="fin-fixas-sub">0 itens</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Despesas variáveis</div>
+          <div class="metric-value amber" id="fin-variaveis">R$ 0</div>
+          <div class="metric-sub" id="fin-var-sub">0 itens</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Saldo do mês</div>
+          <div class="metric-value" id="fin-saldo">R$ 0</div>
+          <div class="metric-sub">receita − despesas</div>
+        </div>
+      </div>
+
+      <!-- PROGRESS BAR -->
+      <div class="progress-wrap">
+        <div class="progress-header">
+          <span class="progress-title">Comprometimento da receita</span>
+          <span class="progress-pct" id="fin-pct">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="fin-bar" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="fin-bar-label">R$ 0 comprometidos</span><span id="fin-bar-total">de R$ 0</span></div>
+      </div>
+
+      <div class="two-col">
+        <!-- CHART -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Distribuição de gastos</div></div>
+          <div style="height:220px;padding:12px 16px"><canvas id="chartFin"></canvas></div>
+        </div>
+        <!-- INTEGRATION WITH FOOD -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Conexão com alimentação</div></div>
+          <div id="fin-food-summary"></div>
+        </div>
+      </div>
+
+      <!-- RECEITAS -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">💚 Receitas <span class="badge badge-green" id="badge-receitas">0</span></div>
+          <button class="btn btn-sm btn-primary" onclick="openFinModal('receita')">+ Adicionar</button>
+        </div>
+        <div class="card-body" id="items-receitas"></div>
+      </div>
+
+      <!-- DESPESAS PESSOAIS FIXAS -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🔴 Despesas Fixas <span class="badge badge-red" id="badge-fixas">0</span></div>
+          <button class="btn btn-sm btn-primary" onclick="openFinModal('fixa')">+ Adicionar</button>
+        </div>
+        <div class="card-body" id="items-fixas"></div>
+      </div>
+
+      <!-- DESPESAS ORB DESIGN -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🟠 Despesas Orb Design <span class="badge badge-amber" id="badge-orb">0</span></div>
+          <button class="btn btn-sm btn-primary" onclick="openFinModal('orb')">+ Adicionar</button>
+        </div>
+        <div class="card-body" id="items-orb"></div>
+      </div>
+
+      <!-- DÍVIDAS -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">⚠️ Dívidas e Acordos <span class="badge badge-amber" id="badge-dividas">0</span></div>
+          <button class="btn btn-sm btn-primary" onclick="openFinModal('divida')">+ Adicionar</button>
+        </div>
+        <div class="card-body" id="items-dividas"></div>
+      </div>
+
+      <!-- DESPESAS VARIÁVEIS -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🔵 Despesas Variáveis <span class="badge badge-blue" id="badge-variaveis">0</span></div>
+          <button class="btn btn-sm btn-primary" onclick="openFinModal('variavel')">+ Adicionar</button>
+        </div>
+        <div class="card-body" id="items-variaveis"></div>
+      </div>
+
+    </section>
   </div><!-- /content -->
 </div><!-- /main -->
 </div><!-- /app-shell (original) -->
@@ -479,6 +580,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
     <button class="mobile-nav-item active" onclick="switchSection('mensal',this,true)"><span class="mobile-nav-icon">🛒</span>Mensal</button>
     <button class="mobile-nav-item" onclick="switchSection('estoque',this,true)"><span class="mobile-nav-icon">📦</span>Estoque</button>
     <button class="mobile-nav-item" onclick="switchSection('med',this,true)"><span class="mobile-nav-icon">💊</span>Remédios</button>
+    <button class="mobile-nav-item" onclick="switchSection('financeiro',this,true)"><span class="mobile-nav-icon">💰</span>Finanças</button>
     <button class="mobile-nav-item" onclick="switchSection('gastos',this,true)"><span class="mobile-nav-icon">📊</span>Gastos</button>
   </div>
 </nav>
@@ -737,7 +839,47 @@ function defaultData() {
       {id:7,nome:'Loratadina gotas infantil',para:'🧒 Criança 4 anos',qtd:'1 frasco',preco:18,vence:'2026-09-01',uso:'Alergia, coceira',dose:'Conforme peso — ver bula',checked:false},
       {id:8,nome:'Dipirona gotas',para:'✅ Todos',qtd:'1 frasco',preco:10,vence:'2026-11-01',uso:'Febre alta, dor intensa',dose:'Conforme peso, +3 meses',checked:false},
     ],
-    nextId: {mensal:200, estoque:200, med:200}
+    nextId: {mensal:200, estoque:200, med:200, fin:100},
+    fin: {
+      receitas: [
+        {id:1,nome:'Italo',valor:6000,dia:30,status:'pendente',obs:''},
+        {id:2,nome:'João Menna',valor:5000,dia:5,status:'pendente',obs:''},
+        {id:3,nome:'Magus',valor:2000,dia:5,status:'pendente',obs:''},
+        {id:4,nome:'MedGM',valor:2000,dia:null,status:'pendente',obs:''},
+        {id:5,nome:'Você Radiologista',valor:2500,dia:null,status:'pendente',obs:''},
+        {id:6,nome:'Eaa',valor:1000,dia:1,status:'pendente',obs:''},
+        {id:7,nome:'Yasmin',valor:1000,dia:10,status:'pendente',obs:''},
+        {id:8,nome:'Mor',valor:2000,dia:20,status:'pendente',obs:''},
+        {id:9,nome:'Zion',valor:2000,dia:13,status:'pendente',obs:''}
+      ],
+      fixas: [
+        {id:1,nome:'Aluguel + Condomínio',valor:3600,venc:10,status:'pendente',obs:''},
+        {id:2,nome:'Nubank CPF',valor:600,venc:13,status:'pendente',obs:''},
+        {id:3,nome:'Internet Claro',valor:60,venc:10,status:'pendente',obs:''},
+        {id:4,nome:'Condomínio',valor:1000,venc:10,status:'pendente',obs:''},
+        {id:5,nome:'Plano de Saúde',valor:1345.48,venc:null,status:'pendente',obs:''},
+        {id:6,nome:'Plano de Celular',valor:160,venc:17,status:'pendente',obs:''},
+        {id:7,nome:'Compras de Mercado',valor:1800,venc:null,status:'pendente',obs:'Orçamento mensal'},
+        {id:8,nome:'Nubank Esther',valor:600,venc:null,status:'pendente',obs:''},
+        {id:9,nome:'Energia',valor:0,venc:null,status:'pendente',obs:'Variável'},
+        {id:10,nome:'Estoque Mensal',valor:500,venc:null,status:'pendente',obs:''}
+      ],
+      orb: [
+        {id:1,nome:'Simples Nacional',valor:0,venc:21,status:'pendente',obs:'Variável'},
+        {id:2,nome:'IR',valor:0,venc:19,status:'pendente',obs:'Variável'},
+        {id:3,nome:'Contabilidade',valor:405,venc:1,status:'pendente',obs:''},
+        {id:4,nome:'Hospedagem Orb',valor:35.90,venc:1,status:'pendente',obs:''},
+        {id:5,nome:'Parcelamento LMM',valor:0,venc:9,status:'pendente',obs:'Variável'},
+        {id:6,nome:'Robson',valor:2000,venc:30,status:'pendente',obs:''}
+      ],
+      dividas: [
+        {id:1,nome:'Carrefour',parcela:604.80,total:18144.02,pagas:0,qtd:30,status:'pendente'},
+        {id:2,nome:'Pagamento cartão Lourdes',parcela:2000,total:2000,pagas:0,qtd:1,status:'pendente'}
+      ],
+      variaveis: [
+        {id:1,nome:'Desktop Finalização e Fechamento',valor:0,venc:null,status:'pendente',obs:'Valor a definir'}
+      ]
+    }
   };
 }
 
@@ -803,6 +945,8 @@ function sanitizeData(data) {
   if (!data.months || typeof data.months !== 'object') data.months = {};
   if (!Array.isArray(data.estoque)) data.estoque = [];
   if (!Array.isArray(data.med)) data.med = [];
+  if (!data.fin) data.fin = { receitas:[], fixas:[], orb:[], dividas:[], variaveis:[] };
+  if (!data.nextId.fin) data.nextId.fin = 100;
   if (Object.keys(data.months).length === 0) {
     data.months[CURRENT_MONTH_KEY] = { label: 'Mar/26', budget: 1800, items: [] };
   }
@@ -893,6 +1037,7 @@ function renderAll() {
   renderEstoque();
   renderMed();
   if (currentSection === 'gastos') renderGastos();
+  if (currentSection === 'financeiro') renderFinanceiro();
 }
 
 // ── HELPERS ──
@@ -964,11 +1109,13 @@ function switchSection(sec, el, isMobile) {
     mensal:['Compras Mensais', monthLabelFull(currentMonthKey)],
     estoque:['Estoque de Alimentos','Reserva de emergência'],
     med:['Medicamentos','Kit de primeiros socorros'],
-    gastos:['Gastos & Comparação','Todos os meses']
+    gastos:['Gastos & Comparação','Todos os meses'],
+    financeiro:['Gestão Financeira','Receitas, despesas e dívidas']
   };
   document.getElementById('topbar-title').textContent = titles[sec][0];
   document.getElementById('topbar-sub').textContent = titles[sec][1];
   if(sec==='gastos') renderGastos();
+  if(sec==='financeiro') renderFinanceiro();
 }
 
 function toggleShowRecurring() {
@@ -1465,7 +1612,273 @@ function saveBudget() {
   renderMensal();
 }
 
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeModal();closeMonthModal();closeRenameModal();closeBudgetModal();} });
+
+// ── GESTÃO FINANCEIRA ──
+
+function fmtFin(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function statusBadge(s) {
+  const map = {
+    pendente: '<span class="badge badge-amber">⏳ Pendente</span>',
+    pago:     '<span class="badge badge-green">✅ Pago</span>',
+    recebido: '<span class="badge badge-green">✅ Recebido</span>',
+    parcial:  '<span class="badge" style="background:#EFF6FF;color:#1D4ED8">🔶 Parcial</span>',
+    atrasado: '<span class="badge badge-red">🔴 Atrasado</span>'
+  };
+  return map[s] || '<span class="badge badge-gray">—</span>';
+}
+
+function renderFinanceiro() {
+  const fin = appData.fin || {};
+  const receitas = fin.receitas || [];
+  const fixas    = fin.fixas    || [];
+  const orb      = fin.orb      || [];
+  const dividas  = fin.dividas  || [];
+  const variaveis= fin.variaveis|| [];
+
+  const totalReceita  = receitas.reduce((s,i)=>s+i.valor,0);
+  const totalFixas    = fixas.reduce((s,i)=>s+i.valor,0);
+  const totalOrb      = orb.reduce((s,i)=>s+i.valor,0);
+  const totalVar      = variaveis.reduce((s,i)=>s+i.valor,0);
+  const totalDividas  = dividas.reduce((s,i)=>s+i.parcela,0);
+  const totalDespesas = totalFixas + totalOrb + totalVar + totalDividas;
+  const saldo         = totalReceita - totalDespesas;
+  const pct           = totalReceita > 0 ? Math.min(100, Math.round(totalDespesas/totalReceita*100)) : 0;
+
+  // Metrics
+  document.getElementById('fin-receita').textContent     = fmtFin(totalReceita);
+  document.getElementById('fin-receita-sub').textContent = receitas.length + ' fontes';
+  document.getElementById('fin-fixas').textContent       = fmtFin(totalFixas + totalOrb);
+  document.getElementById('fin-fixas-sub').textContent   = (fixas.length + orb.length) + ' itens';
+  document.getElementById('fin-variaveis').textContent   = fmtFin(totalVar + totalDividas);
+  document.getElementById('fin-var-sub').textContent     = (variaveis.length + dividas.length) + ' itens';
+  const saldoEl = document.getElementById('fin-saldo');
+  saldoEl.textContent  = fmtFin(saldo);
+  saldoEl.className    = 'metric-value ' + (saldo >= 0 ? 'green' : 'red');
+
+  // Progress
+  const bar = document.getElementById('fin-bar');
+  bar.style.width = pct + '%';
+  bar.className = 'progress-fill' + (pct>90?' danger':pct>70?' warn':'');
+  document.getElementById('fin-pct').textContent          = pct + '%';
+  document.getElementById('fin-bar-label').textContent    = fmtFin(totalDespesas) + ' comprometidos';
+  document.getElementById('fin-bar-total').textContent    = 'de ' + fmtFin(totalReceita);
+
+  // Badges
+  document.getElementById('badge-receitas').textContent  = receitas.length;
+  document.getElementById('badge-fixas').textContent     = fixas.length;
+  document.getElementById('badge-orb').textContent       = orb.length;
+  document.getElementById('badge-dividas').textContent   = dividas.length;
+  document.getElementById('badge-variaveis').textContent = variaveis.length;
+
+  // Chart
+  destroyChart('fin');
+  const chartLabels = ['Desp. Fixas','Orb Design','Variáveis','Dívidas'];
+  const chartVals   = [totalFixas, totalOrb, totalVar, totalDividas];
+  if(chartVals.some(v=>v>0)) {
+    charts.fin = new Chart(document.getElementById('chartFin'),{
+      type:'doughnut',
+      data:{labels:chartLabels,datasets:[{data:chartVals,backgroundColor:['#B91C1C','#B45309','#1A5FA8','#6B3FA0'],borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:8,padding:6}}}}
+    });
+  }
+
+  // Food integration panel
+  const foodBudget = appData.months[currentMonthKey] ? (appData.months[currentMonthKey].budget||1800) : 1800;
+  const foodSpent  = (appData.months[currentMonthKey]?.items||[]).filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
+  const estoqueGasto = appData.estoque.reduce((s,i)=>s+i.preco*i.un,0);
+  document.getElementById('fin-food-summary').innerHTML =
+    '<div class="summary-row"><span class="summary-label">🛒 Orçamento mercado</span><span class="summary-val">' + fmtFin(foodBudget) + '</span></div>' +
+    '<div class="summary-row"><span class="summary-label">🛒 Gasto mercado (mês)</span><span class="summary-val">' + fmtFin(foodSpent) + '</span></div>' +
+    '<div class="summary-row"><span class="summary-label">📦 Investido em estoque</span><span class="summary-val">' + fmtFin(estoqueGasto) + '</span></div>' +
+    '<div class="summary-row total"><span class="summary-label">Total alimentação</span><span class="summary-val">' + fmtFin(foodSpent+estoqueGasto) + '</span></div>';
+
+  // Render lists
+  renderFinList('receitas', receitas, 'receita');
+  renderFinList('fixas',    fixas,    'fixa');
+  renderFinList('orb',      orb,      'orb');
+  renderFinList('variaveis',variaveis,'variavel');
+  renderFinDividas(dividas);
+}
+
+function renderFinList(section, items, type) {
+  const el = document.getElementById('items-' + section);
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-sub">Nenhum item. Clique em + para adicionar.</div></div>';
+    return;
+  }
+  const isReceita = (type === 'receita');
+  el.innerHTML = items.map(it => {
+    const valor = it.valor || 0;
+    const extra = isReceita
+      ? (it.dia ? `<span class="badge badge-gray">dia ${it.dia}</span>` : '')
+      : (it.venc ? `<span class="badge badge-gray">vence dia ${it.venc}</span>` : '');
+    return `<div class="item-row">
+      <div class="item-info">
+        <div class="item-name">${it.nome}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:3px">
+          ${statusBadge(it.status)} ${extra}
+          ${it.obs ? '<span class="badge badge-gray">' + it.obs + '</span>' : ''}
+        </div>
+      </div>
+      <div class="item-actions">
+        <span class="item-price" style="color:${isReceita?'var(--green)':'var(--red)'}">${fmtFin(valor)}</span>
+        <button class="btn btn-xs" style="background:none;border:1px solid var(--border);color:var(--text3);padding:3px 7px" onclick="toggleFinStatus('${section}',${it.id})">${it.status==='pago'||it.status==='recebido'?'↩':'✓'}</button>
+        <button class="btn btn-xs btn-edit" onclick="editFinItem('${type}',${it.id})">✎</button>
+        <button class="btn btn-xs btn-danger" onclick="delFinItem('${section}',${it.id})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderFinDividas(dividas) {
+  const el = document.getElementById('items-dividas');
+  if (!dividas.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-sub">Nenhuma dívida cadastrada.</div></div>';
+    return;
+  }
+  el.innerHTML = dividas.map(it => {
+    const restantes = (it.qtd||0) - (it.pagas||0);
+    const totalRestante = restantes * it.parcela;
+    const progressPct = it.qtd > 0 ? Math.round((it.pagas/it.qtd)*100) : 0;
+    return `<div class="item-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+        <div>
+          <div class="item-name">${it.nome}</div>
+          <div style="display:flex;gap:5px;margin-top:3px">${statusBadge(it.status)}
+            <span class="badge badge-gray">${it.pagas||0}/${it.qtd||'?'} parcelas</span>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="item-price" style="color:var(--red)">${fmtFin(it.parcela)}<span style="font-size:10px;color:var(--text3)">/mês</span></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Total restante: ${fmtFin(totalRestante)}</div>
+        </div>
+      </div>
+      <div style="width:100%;display:flex;align-items:center;gap:10px">
+        <div class="progress-bar" style="flex:1;height:5px"><div class="progress-fill" style="width:${progressPct}%;background:var(--amber)"></div></div>
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap">${progressPct}% quitado</span>
+        <button class="btn btn-xs btn-edit" onclick="editFinItem('divida',${it.id})">✎</button>
+        <button class="btn btn-xs btn-danger" onclick="delFinItem('dividas',${it.id})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleFinStatus(section, id) {
+  const item = (appData.fin[section]||[]).find(i=>i.id===id);
+  if (!item) return;
+  const paid = ['pago','recebido'];
+  if (section === 'receitas') {
+    item.status = paid.includes(item.status) ? 'pendente' : 'recebido';
+  } else {
+    item.status = paid.includes(item.status) ? 'pendente' : 'pago';
+  }
+  saveData(); renderFinanceiro();
+}
+
+function delFinItem(section, id) {
+  const arr = appData.fin[section];
+  if (!arr) return;
+  appData.fin[section] = arr.filter(i=>i.id!==id);
+  saveData(); renderFinanceiro();
+}
+
+// ── FIN MODAL ──
+let finEditMode = false, finEditType = null, finEditId = null;
+
+const finTypeToSection = { receita:'receitas', fixa:'fixas', orb:'orb', variavel:'variaveis', divida:'dividas' };
+
+function openFinModal(type, id) {
+  finEditMode = !!id; finEditType = type; finEditId = id || null;
+  const titles = { receita:'Receita', fixa:'Despesa Fixa', orb:'Despesa Orb', variavel:'Despesa Variável', divida:'Dívida' };
+  document.getElementById('fin-modal-title').textContent = (finEditMode?'Editar ':'Nova ') + (titles[type]||'');
+  document.getElementById('fin-modal-save-btn').textContent = finEditMode ? 'Salvar alterações' : 'Salvar';
+
+  document.getElementById('fin-form-receita').style.display = type==='receita' ? 'block' : 'none';
+  document.getElementById('fin-form-despesa').style.display = ['fixa','orb','variavel'].includes(type) ? 'block' : 'none';
+  document.getElementById('fin-form-divida').style.display  = type==='divida' ? 'block' : 'none';
+
+  if (finEditMode) {
+    const sec = finTypeToSection[type];
+    const it = (appData.fin[sec]||[]).find(i=>i.id===id);
+    if (!it) return;
+    if (type==='receita') {
+      document.getElementById('fin-r-nome').value   = it.nome;
+      document.getElementById('fin-r-valor').value  = it.valor;
+      document.getElementById('fin-r-dia').value    = it.dia||'';
+      document.getElementById('fin-r-status').value = it.status;
+      document.getElementById('fin-r-obs').value    = it.obs||'';
+    } else if (type==='divida') {
+      document.getElementById('fin-div-nome').value    = it.nome;
+      document.getElementById('fin-div-parcela').value = it.parcela;
+      document.getElementById('fin-div-total').value   = it.total||'';
+      document.getElementById('fin-div-pagas').value   = it.pagas||0;
+      document.getElementById('fin-div-qtd').value     = it.qtd||'';
+      document.getElementById('fin-div-status').value  = it.status;
+    } else {
+      document.getElementById('fin-d-nome').value   = it.nome;
+      document.getElementById('fin-d-valor').value  = it.valor;
+      document.getElementById('fin-d-venc').value   = it.venc||'';
+      document.getElementById('fin-d-status').value = it.status;
+      document.getElementById('fin-d-obs').value    = it.obs||'';
+    }
+  } else {
+    ['fin-r-nome','fin-r-valor','fin-r-dia','fin-r-obs'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+    ['fin-d-nome','fin-d-valor','fin-d-venc','fin-d-obs'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+    ['fin-div-nome','fin-div-parcela','fin-div-total','fin-div-pagas','fin-div-qtd'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+    const rs = document.getElementById('fin-r-status'); if(rs) rs.value='pendente';
+    const ds = document.getElementById('fin-d-status'); if(ds) ds.value='pendente';
+    const vs = document.getElementById('fin-div-status'); if(vs) vs.value='pendente';
+  }
+  document.getElementById('fin-modal-overlay').classList.add('open');
+}
+
+function closeFinModal() {
+  document.getElementById('fin-modal-overlay').classList.remove('open');
+  finEditMode=false; finEditType=null; finEditId=null;
+}
+
+function editFinItem(type, id) { openFinModal(type, id); }
+
+function saveFinItem() {
+  const type = finEditType;
+  const sec  = finTypeToSection[type];
+  if (!sec) return;
+  if (!appData.fin[sec]) appData.fin[sec] = [];
+
+  let payload;
+  if (type==='receita') {
+    const nome = document.getElementById('fin-r-nome').value.trim(); if(!nome) return;
+    payload = { nome, valor:parseFloat(document.getElementById('fin-r-valor').value)||0,
+      dia:parseInt(document.getElementById('fin-r-dia').value)||null,
+      status:document.getElementById('fin-r-status').value,
+      obs:document.getElementById('fin-r-obs').value };
+  } else if (type==='divida') {
+    const nome = document.getElementById('fin-div-nome').value.trim(); if(!nome) return;
+    payload = { nome,
+      parcela:parseFloat(document.getElementById('fin-div-parcela').value)||0,
+      total:parseFloat(document.getElementById('fin-div-total').value)||0,
+      pagas:parseInt(document.getElementById('fin-div-pagas').value)||0,
+      qtd:parseInt(document.getElementById('fin-div-qtd').value)||0,
+      status:document.getElementById('fin-div-status').value };
+  } else {
+    const nome = document.getElementById('fin-d-nome').value.trim(); if(!nome) return;
+    payload = { nome, valor:parseFloat(document.getElementById('fin-d-valor').value)||0,
+      venc:parseInt(document.getElementById('fin-d-venc').value)||null,
+      status:document.getElementById('fin-d-status').value,
+      obs:document.getElementById('fin-d-obs').value };
+  }
+
+  if (finEditMode) {
+    const idx = appData.fin[sec].findIndex(i=>i.id===finEditId);
+    if (idx!==-1) appData.fin[sec][idx] = { ...appData.fin[sec][idx], ...payload };
+  } else {
+    appData.fin[sec].push({ id: appData.nextId.fin++, ...payload });
+  }
+  saveData(); closeFinModal(); renderFinanceiro();
+}
+
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeModal();closeMonthModal();closeRenameModal();closeBudgetModal();closeFinModal();} });
 
 // ── START ──
 initFirebase();
@@ -1496,6 +1909,61 @@ initFirebase();
     <div class="modal-footer">
       <button class="btn" onclick="closeBudgetModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveBudget()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FINANCEIRO -->
+<div class="modal-overlay" id="fin-modal-overlay" onclick="if(event.target===this)closeFinModal()">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h3 id="fin-modal-title">Novo item</h3>
+      <button class="modal-close" onclick="closeFinModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <!-- RECEITA -->
+      <div id="fin-form-receita">
+        <div class="form-group"><label class="form-label">Fonte / Cliente</label><input class="form-input" id="fin-r-nome" placeholder="Ex: Italo, João Menna..."></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Valor (R$)</label><input class="form-input" id="fin-r-valor" type="number" step="0.01" placeholder="0,00"></div>
+          <div class="form-group"><label class="form-label">Dia previsto</label><input class="form-input" id="fin-r-dia" type="number" min="1" max="31" placeholder="Ex: 5"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="fin-r-status"><option value="pendente">⏳ Pendente</option><option value="recebido">✅ Recebido</option><option value="parcial">🔶 Parcial</option><option value="atrasado">🔴 Atrasado</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Observação</label><input class="form-input" id="fin-r-obs" placeholder="Opcional"></div>
+      </div>
+      <!-- FIXA / ORB / VARIAVEL -->
+      <div id="fin-form-despesa" style="display:none">
+        <div class="form-group"><label class="form-label">Título</label><input class="form-input" id="fin-d-nome" placeholder="Ex: Aluguel, Internet..."></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Valor (R$)</label><input class="form-input" id="fin-d-valor" type="number" step="0.01" placeholder="0,00"></div>
+          <div class="form-group"><label class="form-label">Vencimento (dia)</label><input class="form-input" id="fin-d-venc" type="number" min="1" max="31" placeholder="Ex: 10"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="fin-d-status"><option value="pendente">⏳ Pendente</option><option value="pago">✅ Pago</option><option value="atrasado">🔴 Atrasado</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Observação</label><input class="form-input" id="fin-d-obs" placeholder="Opcional"></div>
+      </div>
+      <!-- DÍVIDA -->
+      <div id="fin-form-divida" style="display:none">
+        <div class="form-group"><label class="form-label">Título</label><input class="form-input" id="fin-div-nome" placeholder="Ex: Carrefour, Lourdes..."></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Valor parcela (R$)</label><input class="form-input" id="fin-div-parcela" type="number" step="0.01" placeholder="0,00"></div>
+          <div class="form-group"><label class="form-label">Total da dívida (R$)</label><input class="form-input" id="fin-div-total" type="number" step="0.01" placeholder="0,00"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Parcelas pagas</label><input class="form-input" id="fin-div-pagas" type="number" min="0" placeholder="0"></div>
+          <div class="form-group"><label class="form-label">Total de parcelas</label><input class="form-input" id="fin-div-qtd" type="number" min="1" placeholder="Ex: 30"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="fin-div-status"><option value="pendente">⏳ Pendente</option><option value="pago">✅ Parcela paga</option><option value="atrasado">🔴 Atrasado</option></select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeFinModal()">Cancelar</button>
+      <button class="btn btn-primary" id="fin-modal-save-btn" onclick="saveFinItem()">Salvar</button>
     </div>
   </div>
 </div>
