@@ -317,15 +317,22 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       <p id="topbar-sub">Selecione um mês para visualizar</p>
     </div>
     <div class="topbar-right">
-      <button class="btn" onclick="openNewMonthModal()">+ Novo mês</button>
-      <button class="btn btn-primary" onclick="openModal()">+ Adicionar item</button>
+      <button class="btn" id="btn-novo-mes-alim" onclick="openNewMonthModal()">+ Novo mês</button>
+      <button class="btn" id="btn-novo-mes-fin" onclick="openFinMonthModal()" style="display:none">+ Novo mês</button>
+      <button class="btn btn-primary" id="btn-add-item" onclick="openModal()">+ Adicionar item</button>
     </div>
   </div>
 
-  <!-- MONTH TABS (shows on mensal and gastos) -->
+  <!-- MONTH TABS alimentos (mensal/gastos) -->
   <div class="month-tabs-wrap" id="month-tabs-wrap">
     <div id="month-tabs-inner" style="display:flex;align-items:center"></div>
     <button class="tab-add" onclick="openNewMonthModal()" title="Novo mês">+</button>
+  </div>
+
+  <!-- MONTH TABS financeiro -->
+  <div class="month-tabs-wrap" id="fin-month-tabs-wrap" style="display:none">
+    <div id="fin-month-tabs-inner" style="display:flex;align-items:center"></div>
+    <button class="tab-add" onclick="openFinMonthModal()" title="Novo mês financeiro">+</button>
   </div>
 
   <div class="content">
@@ -443,13 +450,6 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 
     <!-- ── GASTOS ── -->
     <section class="section" id="sec-gastos">
-
-      <!-- Tabs: alimentos (month-tabs-wrap) already shows. Fin months tab below -->
-      <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px 0;display:flex;align-items:center;gap:0;overflow-x:auto;margin-bottom:0" id="fin-month-tabs-wrap">
-        <div style="font-size:11px;font-weight:600;color:var(--text3);padding:10px 12px 10px 0;white-space:nowrap;letter-spacing:.5px">💰 Mês financeiro:</div>
-        <div id="fin-month-tabs-inner" style="display:flex;align-items:center"></div>
-        <button onclick="openFinMonthModal()" style="padding:8px 12px;color:var(--blue);font-size:18px;line-height:1;border:none;background:none;cursor:pointer;flex-shrink:0" title="Novo mês financeiro">+</button>
-      </div>
 
       <!-- MEGA METRICS -->
       <div class="metrics-grid" style="margin-bottom:16px">
@@ -1149,10 +1149,8 @@ function switchSection(sec, el, isMobile) {
     document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   }
   el.classList.add('active');
-  const hasTabs = (sec==='mensal'||sec==='gastos');
-  document.getElementById('month-tabs-wrap').style.display = hasTabs ? 'flex' : 'none';
-  const finTabsEl = document.getElementById('fin-month-tabs-wrap');
-  if(finTabsEl) finTabsEl.style.display = sec==='gastos' ? 'flex' : 'none';
+  document.getElementById('month-tabs-wrap').style.display = (sec==='mensal'||sec==='gastos') ? 'flex' : 'none';
+  document.getElementById('fin-month-tabs-wrap').style.display = sec==='financeiro' ? 'flex' : 'none';
   const titles = {
     mensal:['Compras Mensais', monthLabelFull(currentMonthKey)],
     estoque:['Estoque de Alimentos','Reserva de emergência'],
@@ -1164,6 +1162,13 @@ function switchSection(sec, el, isMobile) {
   document.getElementById('topbar-sub').textContent = titles[sec][1];
   if(sec==='gastos') renderGastos();
   if(sec==='financeiro') renderFinanceiro();
+  // Toggle topbar buttons
+  const btnAlim = document.getElementById('btn-novo-mes-alim');
+  const btnFin  = document.getElementById('btn-novo-mes-fin');
+  const btnAdd  = document.getElementById('btn-add-item');
+  if(btnAlim) btnAlim.style.display = (sec==='mensal'||sec==='gastos') ? '' : 'none';
+  if(btnFin)  btnFin.style.display  = sec==='financeiro' ? '' : 'none';
+  if(btnAdd)  btnAdd.style.display  = ['mensal','estoque','med'].includes(sec) ? '' : 'none';
 }
 
 function toggleShowRecurring() {
@@ -1401,7 +1406,6 @@ function delMed(id){ appData.med.splice(appData.med.findIndex(i=>i.id===id),1); 
 
 // ── RENDER GASTOS ──
 function renderGastos() {
-  renderFinMonthTabs();
   const fin    = getFinData();
   const selItems = currentMonthItems();
 
@@ -1489,34 +1493,52 @@ function renderGastos() {
     });
   }
 
-  // ── Chart 4: Comparação entre meses (mercado) ──
-  const keys = sortedMonthKeys();
+  // ── Chart 4: Comparação entre meses financeiros ──
+  const finKeys = Object.keys(appData.finMonths || {});
+  const allFinData = [
+    { key: '__base__', label: 'Base', data: appData.fin },
+    ...finKeys.map(k => ({ key: k, label: (appData.finMonths[k]&&appData.finMonths[k].label)||k, data: appData.finMonths[k] }))
+  ];
+  const selFinKey = currentFinMonthKey || '__base__';
+
   let compareHtml = '<div class="compare-grid" style="margin-bottom:8px">';
-  keys.forEach(k=>{
-    const kItems = appData.months[k].items;
-    const kSpent = kItems.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
-    const isSel  = k===currentMonthKey;
-    const idx    = keys.indexOf(k);
+  allFinData.forEach((entry, idx) => {
+    const d = entry.data || {};
+    const rec   = (d.receitas||[]).reduce((s,i)=>s+i.valor,0);
+    const desp  = (d.fixas||[]).reduce((s,i)=>s+i.valor,0) + (d.orb||[]).reduce((s,i)=>s+i.valor,0) + (d.variaveis||[]).reduce((s,i)=>s+i.valor,0) + (d.dividas||[]).reduce((s,i)=>s+i.parcela,0);
+    const saldoK = rec - desp;
+    const isSel  = entry.key === selFinKey;
     let diffHtml = '';
     if(idx>0){
-      const prev = appData.months[keys[idx-1]].items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
-      if(prev>0){ const d=Math.round((kSpent-prev)/prev*100); diffHtml=`<span class="compare-badge ${d>0?'compare-up':d<0?'compare-down':'compare-same'}">${d>0?'↑':d<0?'↓':'→'}${Math.abs(d)}%</span>`; }
+      const prev = allFinData[idx-1].data || {};
+      const prevRec = (prev.receitas||[]).reduce((s,i)=>s+i.valor,0);
+      const prevDesp = (prev.fixas||[]).reduce((s,i)=>s+i.valor,0)+(prev.orb||[]).reduce((s,i)=>s+i.valor,0)+(prev.variaveis||[]).reduce((s,i)=>s+i.valor,0)+(prev.dividas||[]).reduce((s,i)=>s+i.parcela,0);
+      const prevSaldo = prevRec - prevDesp;
+      if(prevRec>0){ const d2=Math.round((rec-prevRec)/prevRec*100); diffHtml=`<span class="compare-badge ${d2>0?'compare-up':d2<0?'compare-down':'compare-same'}">${d2>0?'↑':d2<0?'↓':'→'}${Math.abs(d2)}% receita</span>`; }
     }
     compareHtml += `<div class="compare-card${isSel?' highlight':''}">
-      <div class="compare-month">${monthLabel(k)}</div>
-      <div class="compare-val" style="font-size:16px">${fmt(kSpent)}</div>
-      ${diffHtml}</div>`;
+      <div class="compare-month">${entry.label}</div>
+      <div class="compare-val" style="font-size:14px;color:var(--green)">${fmt(rec)}</div>
+      <div style="font-size:11px;color:var(--red);margin-top:1px">${fmt(desp)} desp.</div>
+      <div style="font-size:11px;font-weight:600;color:${saldoK>=0?'var(--green)':'var(--red)'};margin-top:2px">Saldo: ${fmt(saldoK)}</div>
+      ${diffHtml}
+    </div>`;
   });
   compareHtml += '</div>';
   document.getElementById('compare-grid-wrap').innerHTML = compareHtml;
   destroyChart('compare');
-  if(keys.length>1){
+  if(allFinData.length>1){
     charts.compare = new Chart(document.getElementById('chartCompare'),{
       type:'bar',
-      data:{labels:keys.map(k=>monthLabel(k)),
-            datasets:[{data:keys.map(k=>appData.months[k].items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0)),
-            backgroundColor:keys.map(k=>k===currentMonthKey?'#1A5FA8':'#B5D4F4'),borderRadius:5,borderWidth:0}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      data:{
+        labels: allFinData.map(e=>e.label),
+        datasets:[
+          {label:'Receita', data:allFinData.map(e=>(e.data?.receitas||[]).reduce((s,i)=>s+i.valor,0)), backgroundColor:'#86EFAC', borderRadius:5, borderWidth:0},
+          {label:'Despesas', data:allFinData.map(e=>((e.data?.fixas||[]).reduce((s,i)=>s+i.valor,0)+(e.data?.orb||[]).reduce((s,i)=>s+i.valor,0)+(e.data?.variaveis||[]).reduce((s,i)=>s+i.valor,0)+(e.data?.dividas||[]).reduce((s,i)=>s+i.parcela,0))), backgroundColor:'#FCA5A5', borderRadius:5, borderWidth:0}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:8,padding:6}}},
         scales:{y:{ticks:{callback:v=>'R$'+Math.round(v),font:{size:9}},grid:{color:'rgba(0,0,0,.04)'}},
                 x:{ticks:{font:{size:10}},grid:{display:false}}}}
     });
@@ -1584,8 +1606,10 @@ function createMonth() {
 
 // ── RENAME / DELETE MONTH ──
 let renamingKey = null;
+let renamingFinKey = null;
 
 function openRenameModal(key) {
+  renamingFinKey = null;
   renamingKey = key;
   document.getElementById('rename-month-input').value = monthLabel(key);
   hideDeleteConfirm();
@@ -1596,6 +1620,7 @@ function closeRenameModal() {
   document.getElementById('rename-modal-overlay').classList.remove('open');
   hideDeleteConfirm();
   renamingKey = null;
+  renamingFinKey = null;
 }
 
 function showDeleteConfirm() {
@@ -1613,12 +1638,19 @@ function hideDeleteConfirm() {
 }
 
 function confirmDeleteMonth() {
+  if (renamingFinKey) {
+    delete appData.finMonths[renamingFinKey];
+    saveData(); closeRenameModal();
+    const remaining = Object.keys(appData.finMonths || {});
+    currentFinMonthKey = remaining.length ? remaining[remaining.length-1] : null;
+    renderFinanceiro();
+    return;
+  }
   const keys = sortedMonthKeys();
   if(keys.length <= 1) { closeRenameModal(); return; }
   const idx = keys.indexOf(renamingKey);
   delete appData.months[renamingKey];
-  saveData();
-  closeRenameModal();
+  saveData(); closeRenameModal();
   const remaining = sortedMonthKeys();
   currentMonthKey = remaining[Math.min(idx, remaining.length-1)];
   renderMonthTabs(); renderMensal();
@@ -1629,12 +1661,15 @@ function deleteCurrentMonth() { showDeleteConfirm(); }
 
 function saveRename() {
   const newLabel = document.getElementById('rename-month-input').value.trim();
-  if(!newLabel || !renamingKey) return;
-  appData.months[renamingKey].label = newLabel;
-  saveData();
-  closeRenameModal();
-  renderMonthTabs();
-  if(currentSection==='gastos') renderGastos();
+  if(!newLabel) return;
+  if (renamingFinKey) {
+    appData.finMonths[renamingFinKey].label = newLabel;
+    saveData(); closeRenameModal(); renderFinanceiro();
+  } else if (renamingKey) {
+    appData.months[renamingKey].label = newLabel;
+    saveData(); closeRenameModal(); renderMonthTabs();
+    if(currentSection==='gastos') renderGastos();
+  }
 }
 
 // ── MODAL ITEM ──
@@ -1784,11 +1819,11 @@ function renderFinMonthTabs() {
   let html = `<button class="month-tab${allActive?' active':''}" onclick="selectFinMonth(null)">Geral</button>`;
   html += keys.map(k => {
     const isSelected = k === currentFinMonthKey;
-    const label = appData.finMonths[k].label || k;
+    const label = (appData.finMonths[k] && appData.finMonths[k].label) ? appData.finMonths[k].label : k;
     if (isSelected) {
       return `<div style="display:flex;align-items:center;border-bottom:2px solid var(--blue);flex-shrink:0">
         <button class="month-tab active" style="border-bottom:none;padding-right:6px" onclick="selectFinMonth('${k}')">${label}</button>
-        <button title="Renomear" onclick="openRenameFinMonthModal('${k}')" style="font-size:13px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0 8px 0 0;line-height:1">✎</button>
+        <button title="Renomear/Excluir" onclick="openRenameFinMonthModal('${k}')" style="font-size:13px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0 8px 0 0;line-height:1">✎</button>
       </div>`;
     }
     return `<button class="month-tab" onclick="selectFinMonth('${k}')">${label}</button>`;
@@ -1798,20 +1833,27 @@ function renderFinMonthTabs() {
 
 function selectFinMonth(key) {
   currentFinMonthKey = key;
-  renderFinMonthTabs();
-  renderGastos();
+  renderFinanceiro();
 }
 
 function openFinMonthModal() {
-  const label = prompt('Nome do mês financeiro (ex: Abril 2026, Mai/26):');
-  if (!label || !label.trim()) return;
+  document.getElementById('fin-month-new-input').value = '';
+  document.getElementById('fin-month-new-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('fin-month-new-input').focus(), 80);
+}
+
+function closeFinMonthNewModal() {
+  document.getElementById('fin-month-new-overlay').classList.remove('open');
+}
+
+function createFinMonth() {
+  const label = document.getElementById('fin-month-new-input').value.trim();
+  if (!label) return;
   const key = 'finmonth_' + Date.now();
   if (!appData.finMonths) appData.finMonths = {};
-
-  // Copy current fin data as starting point
   const src = appData.fin || { receitas:[], fixas:[], orb:[], dividas:[], variaveis:[] };
   appData.finMonths[key] = {
-    label: label.trim(),
+    label,
     receitas: JSON.parse(JSON.stringify(src.receitas||[])).map(i=>({...i, status:'pendente'})),
     fixas:    JSON.parse(JSON.stringify(src.fixas||[])).map(i=>({...i, status:'pendente'})),
     orb:      JSON.parse(JSON.stringify(src.orb||[])).map(i=>({...i, status:'pendente'})),
@@ -1820,17 +1862,17 @@ function openFinMonthModal() {
   };
   saveData();
   currentFinMonthKey = key;
-  renderFinMonthTabs();
-  renderGastos();
+  closeFinMonthNewModal();
+  renderFinanceiro();
 }
 
 function openRenameFinMonthModal(key) {
-  const label = prompt('Novo nome:', appData.finMonths[key].label || key);
-  if (!label || !label.trim()) return;
-  appData.finMonths[key].label = label.trim();
-  saveData();
-  renderFinMonthTabs();
-  renderGastos();
+  // Reuse the rename month modal — set a flag to know it's for fin months
+  renamingFinKey = key;
+  document.getElementById('rename-month-input').value = appData.finMonths[key].label || key;
+  hideDeleteConfirm();
+  document.getElementById('rename-modal-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('rename-month-input').focus(), 80);
 }
 
 // ── GESTÃO FINANCEIRA ──
@@ -1849,7 +1891,8 @@ function statusBadge(s) {
 }
 
 function renderFinanceiro() {
-  const fin = appData.fin || {};
+  renderFinMonthTabs();
+  const fin = getFinData();
   const receitas = fin.receitas || [];
   const fixas    = fin.fixas    || [];
   const orb      = fin.orb      || [];
@@ -1904,8 +1947,6 @@ function renderFinanceiro() {
   }
 
 
-
-  renderFinMonthTabs();
 
   // ── Payment progress bars (sem anel circular) ──
   const paidR = receitas.filter(i=>i.status==='recebido'||i.status==='parcial').reduce((s,i)=>s+i.valor,0);
@@ -2173,7 +2214,7 @@ function saveFinItem() {
   saveData(); closeFinModal(); renderFinanceiro();
 }
 
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeModal();closeMonthModal();closeRenameModal();closeBudgetModal();closeFinModal();} });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeModal();closeMonthModal();closeRenameModal();closeBudgetModal();closeFinModal();if(typeof closeFinMonthNewModal==='function')closeFinMonthNewModal();} });
 
 // ── START ──
 initFirebase();
@@ -2259,6 +2300,27 @@ initFirebase();
     <div class="modal-footer">
       <button class="btn" onclick="closeFinModal()">Cancelar</button>
       <button class="btn btn-primary" id="fin-modal-save-btn" onclick="saveFinItem()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO MÊS FINANCEIRO -->
+<div class="modal-overlay" id="fin-month-new-overlay" onclick="if(event.target===this)closeFinMonthNewModal()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <h3>Novo mês financeiro</h3>
+      <button class="modal-close" onclick="closeFinMonthNewModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nome do mês</label>
+        <input class="form-input" id="fin-month-new-input" placeholder="Ex: Abril 2026, Abr/26...">
+        <p style="font-size:11px;color:var(--text3);margin-top:6px">Todos os itens do mês base serão copiados com os status resetados para Pendente.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeFinMonthNewModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="createFinMonth()">Criar mês</button>
     </div>
   </div>
 </div>
