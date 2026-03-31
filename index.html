@@ -444,6 +444,13 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
     <!-- ── GASTOS ── -->
     <section class="section" id="sec-gastos">
 
+      <!-- Tabs: alimentos (month-tabs-wrap) already shows. Fin months tab below -->
+      <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px 0;display:flex;align-items:center;gap:0;overflow-x:auto;margin-bottom:0" id="fin-month-tabs-wrap">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);padding:10px 12px 10px 0;white-space:nowrap;letter-spacing:.5px">💰 Mês financeiro:</div>
+        <div id="fin-month-tabs-inner" style="display:flex;align-items:center"></div>
+        <button onclick="openFinMonthModal()" style="padding:8px 12px;color:var(--blue);font-size:18px;line-height:1;border:none;background:none;cursor:pointer;flex-shrink:0" title="Novo mês financeiro">+</button>
+      </div>
+
       <!-- MEGA METRICS -->
       <div class="metrics-grid" style="margin-bottom:16px">
         <div class="metric-card">
@@ -554,10 +561,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
           <div class="card-header"><div class="card-title">Distribuição de gastos</div></div>
           <div style="height:220px;padding:12px 16px"><canvas id="chartFin"></canvas></div>
         </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">Progresso de pagamentos</div></div>
-          <div style="padding:16px 20px" id="fin-payment-progress"></div>
-        </div>
+
       </div>
 
       <!-- RECEITAS -->
@@ -876,6 +880,7 @@ function defaultData() {
       {id:8,nome:'Dipirona gotas',para:'✅ Todos',qtd:'1 frasco',preco:10,vence:'2026-11-01',uso:'Febre alta, dor intensa',dose:'Conforme peso, +3 meses',checked:false},
     ],
     nextId: {mensal:200, estoque:200, med:200, fin:100},
+    finMonths: {},
     fin: {
       receitas: [
         {id:1,nome:'Italo',valor:6000,dia:30,status:'pendente',obs:''},
@@ -925,6 +930,7 @@ let currentSection = 'mensal';
 let currentMonthKey = CURRENT_MONTH_KEY;
 let charts = {};
 let showRecurring = false;
+let currentFinMonthKey = null; // null = use aggregate fin data
 let isSyncing = false;
 let saveTimer = null;
 let unsubscribe = null;
@@ -982,6 +988,7 @@ function sanitizeData(data) {
   if (!Array.isArray(data.estoque)) data.estoque = [];
   if (!Array.isArray(data.med)) data.med = [];
   if (!data.fin) data.fin = { receitas:[], fixas:[], orb:[], dividas:[], variaveis:[] };
+  if (!data.finMonths) data.finMonths = {};
   if (!data.nextId.fin) data.nextId.fin = 100;
   if (Object.keys(data.months).length === 0) {
     data.months[CURRENT_MONTH_KEY] = { label: 'Mar/26', budget: 1800, items: [] };
@@ -1141,6 +1148,8 @@ function switchSection(sec, el, isMobile) {
   el.classList.add('active');
   const hasTabs = (sec==='mensal'||sec==='gastos');
   document.getElementById('month-tabs-wrap').style.display = hasTabs ? 'flex' : 'none';
+  const finTabsEl = document.getElementById('fin-month-tabs-wrap');
+  if(finTabsEl) finTabsEl.style.display = sec==='gastos' ? 'flex' : 'none';
   const titles = {
     mensal:['Compras Mensais', monthLabelFull(currentMonthKey)],
     estoque:['Estoque de Alimentos','Reserva de emergência'],
@@ -1288,6 +1297,7 @@ function renderEstoque() {
               <div class="stock-meta"><span class="badge badge-blue">${it.un} un. · ${fmt(tv)}</span>${expBadge(it.vence)}</div>
             </div>
             <div style="display:flex;gap:5px;align-items:center">
+              <button class="btn btn-xs" style="border:1px solid ${it.includeInAnalysis?'var(--green)':'var(--border2)'};background:${it.includeInAnalysis?'var(--green-bg)':'none'};color:${it.includeInAnalysis?'var(--green)':'var(--text3)'};padding:3px 7px;font-size:11px" onclick="event.stopPropagation();toggleEstoqueAnalysis(${it.id})" title="Incluir na análise geral">${it.includeInAnalysis?'✓ Análise':'+ Análise'}</button>
               <button class="btn btn-xs btn-edit" onclick="event.stopPropagation();editEstoque(${it.id})">✎</button>
               <button class="btn btn-xs btn-danger" onclick="event.stopPropagation();delEstoque(${it.id})">✕</button>
               <span class="expand-arrow" id="arr-${it.id}">▾</span>
@@ -1354,6 +1364,7 @@ function renderMed() {
         </div>
         <div class="item-actions">
           <span class="item-price${it.checked?' done':''}">${fmt(it.preco)}</span>
+          <button class="btn btn-xs" style="border:1px solid ${it.includeInAnalysis?'var(--green)':'var(--border2)'};background:${it.includeInAnalysis?'var(--green-bg)':'none'};color:${it.includeInAnalysis?'var(--green)':'var(--text3)'};padding:3px 7px;font-size:11px" onclick="toggleMedAnalysis(${it.id})" title="Incluir na análise geral">${it.includeInAnalysis?'✓':'+ Análise'}</button>
           <button class="btn btn-xs btn-edit" onclick="editMed(${it.id})">✎</button>
           <button class="btn btn-xs btn-danger" onclick="delMed(${it.id})">✕</button>
         </div>
@@ -1371,19 +1382,31 @@ function renderMed() {
   document.getElementById('sb-med').textContent=appData.med.length;
 }
 
+
+function toggleEstoqueAnalysis(id) {
+  const it = appData.estoque.find(i=>i.id===id);
+  if(it) { it.includeInAnalysis = !it.includeInAnalysis; saveData(); renderEstoque(); }
+}
+
+function toggleMedAnalysis(id) {
+  const it = appData.med.find(i=>i.id===id);
+  if(it) { it.includeInAnalysis = !it.includeInAnalysis; saveData(); renderMed(); }
+}
+
 function toggleMed(id){ const it=appData.med.find(i=>i.id===id); if(it){it.checked=!it.checked;saveData();renderMed();} }
 function delMed(id){ appData.med.splice(appData.med.findIndex(i=>i.id===id),1); saveData(); renderMed(); }
 
 // ── RENDER GASTOS ──
 function renderGastos() {
-  const fin    = appData.fin || {};
+  renderFinMonthTabs();
+  const fin    = getFinData();
   const selItems = currentMonthItems();
 
   // ── Alimentação ──
   const mensalTotal  = selItems.reduce((s,i)=>s+i.preco*i.un, 0);
   const mensalGasto  = selItems.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un, 0);
-  const estoqueTotal = appData.estoque.reduce((s,i)=>s+i.preco*i.un, 0);
-  const medTotal     = appData.med.reduce((s,i)=>s+i.preco, 0);
+  const estoqueTotal = appData.estoque.filter(i=>i.includeInAnalysis).reduce((s,i)=>s+i.preco*i.un, 0);
+  const medTotal     = appData.med.filter(i=>i.includeInAnalysis).reduce((s,i)=>s+i.preco, 0);
 
   // ── Financeiro ──
   const totalReceita  = (fin.receitas||[]).reduce((s,i)=>s+i.valor, 0);
@@ -1516,8 +1539,8 @@ function renderGastos() {
   // Alimentação
   sumHtml += `<div class="cat-header"><span>🛒 Alimentação</span><span style="font-weight:500;color:var(--blue)">${fmt(totalAlim)}</span></div>`;
   sumHtml += `<div class="summary-row"><span class="summary-label">Mercado (lista do mês)</span><span class="summary-val">${fmt(mensalTotal)}</span></div>`;
-  sumHtml += `<div class="summary-row"><span class="summary-label">📦 Estoque</span><span class="summary-val">${fmt(estoqueTotal)}</span></div>`;
-  sumHtml += `<div class="summary-row"><span class="summary-label">💊 Medicamentos</span><span class="summary-val">${fmt(medTotal)}</span></div>`;
+  sumHtml += `<div class="summary-row"><span class="summary-label">📦 Estoque (selecionado)</span><span class="summary-val">${fmt(estoqueTotal)}</span></div>`;
+  sumHtml += `<div class="summary-row"><span class="summary-label">💊 Medicamentos (selecionado)</span><span class="summary-val">${fmt(medTotal)}</span></div>`;
   // Totais
   sumHtml += `<div class="summary-row" style="background:var(--red-bg)"><span class="summary-label" style="font-weight:600">Total despesas</span><span class="summary-val" style="color:var(--red)">${fmt(totalDespesas)}</span></div>`;
   sumHtml += `<div class="summary-row total"><span class="summary-label">Saldo do mês</span><span class="summary-val" style="color:${saldo>=0?'var(--green)':'var(--red)'}">${fmt(saldo)}</span></div>`;
@@ -1736,6 +1759,77 @@ function saveBudget() {
 }
 
 
+
+// ── FIN MONTH TABS ──
+function sortedFinMonthKeys() {
+  return Object.keys(appData.finMonths || {});
+}
+
+function getFinData() {
+  if (currentFinMonthKey && appData.finMonths && appData.finMonths[currentFinMonthKey]) {
+    return appData.finMonths[currentFinMonthKey];
+  }
+  return appData.fin || { receitas:[], fixas:[], orb:[], dividas:[], variaveis:[] };
+}
+
+function renderFinMonthTabs() {
+  const wrap = document.getElementById('fin-month-tabs-inner');
+  if (!wrap) return;
+  const keys = sortedFinMonthKeys();
+  const allActive = !currentFinMonthKey;
+
+  let html = `<button class="month-tab${allActive?' active':''}" onclick="selectFinMonth(null)">Geral</button>`;
+  html += keys.map(k => {
+    const isSelected = k === currentFinMonthKey;
+    const label = appData.finMonths[k].label || k;
+    if (isSelected) {
+      return `<div style="display:flex;align-items:center;border-bottom:2px solid var(--blue);flex-shrink:0">
+        <button class="month-tab active" style="border-bottom:none;padding-right:6px" onclick="selectFinMonth('${k}')">${label}</button>
+        <button title="Renomear" onclick="openRenameFinMonthModal('${k}')" style="font-size:13px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0 8px 0 0;line-height:1">✎</button>
+      </div>`;
+    }
+    return `<button class="month-tab" onclick="selectFinMonth('${k}')">${label}</button>`;
+  }).join('');
+  wrap.innerHTML = html;
+}
+
+function selectFinMonth(key) {
+  currentFinMonthKey = key;
+  renderFinMonthTabs();
+  renderGastos();
+}
+
+function openFinMonthModal() {
+  const label = prompt('Nome do mês financeiro (ex: Abril 2026, Mai/26):');
+  if (!label || !label.trim()) return;
+  const key = 'finmonth_' + Date.now();
+  if (!appData.finMonths) appData.finMonths = {};
+
+  // Copy current fin data as starting point
+  const src = appData.fin || { receitas:[], fixas:[], orb:[], dividas:[], variaveis:[] };
+  appData.finMonths[key] = {
+    label: label.trim(),
+    receitas: JSON.parse(JSON.stringify(src.receitas||[])).map(i=>({...i, status:'pendente'})),
+    fixas:    JSON.parse(JSON.stringify(src.fixas||[])).map(i=>({...i, status:'pendente'})),
+    orb:      JSON.parse(JSON.stringify(src.orb||[])).map(i=>({...i, status:'pendente'})),
+    dividas:  JSON.parse(JSON.stringify(src.dividas||[])),
+    variaveis:JSON.parse(JSON.stringify(src.variaveis||[])).map(i=>({...i, status:'pendente'}))
+  };
+  saveData();
+  currentFinMonthKey = key;
+  renderFinMonthTabs();
+  renderGastos();
+}
+
+function openRenameFinMonthModal(key) {
+  const label = prompt('Novo nome:', appData.finMonths[key].label || key);
+  if (!label || !label.trim()) return;
+  appData.finMonths[key].label = label.trim();
+  saveData();
+  renderFinMonthTabs();
+  renderGastos();
+}
+
 // ── GESTÃO FINANCEIRA ──
 
 function fmtFin(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -1808,66 +1902,7 @@ function renderFinanceiro() {
 
 
 
-  // ── Payment progress panel ──
-  const paidR = receitas.filter(i=>i.status==='recebido'||i.status==='parcial').reduce((s,i)=>s+i.valor,0);
-  const paidF = fixas.filter(i=>i.status==='pago').reduce((s,i)=>s+i.valor,0);
-  const paidO = orb.filter(i=>i.status==='pago').reduce((s,i)=>s+i.valor,0);
-  const paidV = variaveis.filter(i=>i.status==='pago').reduce((s,i)=>s+i.valor,0);
-  const paidD = dividas.reduce((s,i)=>s+(i.pagas||0)*i.parcela, 0);
-
-  const groups = [
-    { label:'💚 Receitas recebidas',   paid: paidR,   total: totalReceita,                     color:'#2A7A3B' },
-    { label:'🔴 Desp. Fixas pagas',    paid: paidF,   total: totalFixas,                       color:'#B91C1C' },
-    { label:'🟠 Orb Design pagas',     paid: paidO,   total: totalOrb,                         color:'#B45309' },
-    { label:'🔵 Variáveis pagas',      paid: paidV,   total: totalVar,                         color:'#0E7490' },
-    { label:'⚠️ Dívidas — parcelas pagas', paid: paidD, total: dividas.reduce((s,i)=>s+(i.qtd||1)*i.parcela,0), color:'#6B3FA0' },
-  ].filter(g => g.total > 0);
-
-  const totalPaid = paidF + paidO + paidV + paidD;
-  const totalDesp = totalFixas + totalOrb + totalVar + totalDividas;
-  const overallPct = totalDesp > 0 ? Math.min(100, Math.round(totalPaid / totalDesp * 100)) : 0;
-
-  let progressHtml = '';
-
-  // Overall ring summary at top
-  progressHtml += `<div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-    <div style="position:relative;width:72px;height:72px;flex-shrink:0">
-      <svg viewBox="0 0 72 72" style="width:72px;height:72px;transform:rotate(-90deg)">
-        <circle cx="36" cy="36" r="28" fill="none" stroke="var(--border)" stroke-width="8"/>
-        <circle cx="36" cy="36" r="28" fill="none" stroke="${overallPct>=80?'#2A7A3B':overallPct>=50?'#B45309':'#B91C1C'}"
-          stroke-width="8" stroke-linecap="round"
-          stroke-dasharray="${Math.round(2*Math.PI*28)}"
-          stroke-dashoffset="${Math.round(2*Math.PI*28*(1-overallPct/100))}"/>
-      </svg>
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-size:14px;font-weight:700;color:var(--text)">${overallPct}%</div>
-    </div>
-    <div>
-      <div style="font-size:13px;font-weight:600;color:var(--text)">Despesas pagas</div>
-      <div style="font-size:12px;color:var(--green);margin-top:2px">${fmtFin(totalPaid)} pagos</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:1px">de ${fmtFin(totalDesp)} total</div>
-    </div>
-  </div>`;
-
-  // Individual progress bars per group
-  groups.forEach(g => {
-    const pct = g.total > 0 ? Math.min(100, Math.round(g.paid / g.total * 100)) : 0;
-    progressHtml += `<div style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-        <span style="font-size:12px;color:var(--text2)">${g.label}</span>
-        <span style="font-size:11px;font-weight:600;color:var(--text3)">${fmtFin(g.paid)} / ${fmtFin(g.total)}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="flex:1;height:7px;background:var(--bg);border-radius:4px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:${g.color};border-radius:4px;transition:width .4s ease"></div>
-        </div>
-        <span style="font-size:11px;font-weight:600;min-width:30px;text-align:right;color:${g.color}">${pct}%</span>
-      </div>
-    </div>`;
-  });
-
-  if(!groups.length) progressHtml = '<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px 0">Nenhuma despesa cadastrada ainda.</div>';
-
-  document.getElementById('fin-payment-progress').innerHTML = progressHtml;
+  renderFinMonthTabs();
 
   // Render lists
   renderFinList('receitas', receitas, 'receita');
