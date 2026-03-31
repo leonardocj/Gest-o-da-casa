@@ -1904,6 +1904,41 @@ function renderFinanceiro() {
 
   renderFinMonthTabs();
 
+  // ── Payment progress bars (sem anel circular) ──
+  const paidR = receitas.filter(i=>i.status==='recebido'||i.status==='parcial').reduce((s,i)=>s+i.valor,0);
+  const paidF = fixas.filter(i=>i.status==='pago').reduce((s,i)=>s+i.valor,0);
+  const paidO = orb.filter(i=>i.status==='pago').reduce((s,i)=>s+i.valor,0);
+  const paidV = variaveis.filter(i=>i.status==='pago').reduce((s,i)=>s+i.valor,0);
+  const paidD = dividas.reduce((s,i)=>s+(i.pagas||0)*i.parcela, 0);
+
+  const progressGroups = [
+    { label:'💚 Receitas recebidas',       paid: paidR, total: totalReceita, color:'#2A7A3B' },
+    { label:'🔴 Despesas Fixas pagas',     paid: paidF, total: totalFixas,   color:'#B91C1C' },
+    { label:'🟠 Orb Design pagas',         paid: paidO, total: totalOrb,     color:'#B45309' },
+    { label:'🔵 Variáveis pagas',          paid: paidV, total: totalVar,     color:'#0E7490' },
+    { label:'⚠️ Dívidas — parcelas pagas', paid: paidD, total: dividas.reduce((s,i)=>s+(i.qtd||1)*i.parcela,0), color:'#6B3FA0' },
+  ].filter(g => g.total > 0);
+
+  let progressHtml = progressGroups.length ? '' : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px 0">Nenhum item cadastrado ainda.</div>';
+
+  progressGroups.forEach(g => {
+    const pct = Math.min(100, Math.round(g.paid / g.total * 100));
+    progressHtml += `<div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:12px;color:var(--text2)">${g.label}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text3)">${fmtFin(g.paid)} / ${fmtFin(g.total)}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${g.color};border-radius:4px;transition:width .4s ease"></div>
+        </div>
+        <span style="font-size:12px;font-weight:600;min-width:34px;text-align:right;color:${g.color}">${pct}%</span>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('fin-payment-progress').innerHTML = progressHtml;
+
   // Render lists
   renderFinList('receitas', receitas, 'receita');
   renderFinList('fixas',    fixas,    'fixa');
