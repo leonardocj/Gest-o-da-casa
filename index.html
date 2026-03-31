@@ -443,34 +443,72 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 
     <!-- ── GASTOS ── -->
     <section class="section" id="sec-gastos">
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="metric-label">Mensal comprado</div><div class="metric-value" id="g-mensal">R$ 0</div></div>
-        <div class="metric-card"><div class="metric-label">Estoque</div><div class="metric-value" id="g-estoque">R$ 0</div></div>
-        <div class="metric-card"><div class="metric-label">Medicamentos</div><div class="metric-value" id="g-med">R$ 0</div></div>
-        <div class="metric-card"><div class="metric-label">Total geral</div><div class="metric-value blue" id="g-total">R$ 0</div></div>
+
+      <!-- MEGA METRICS -->
+      <div class="metrics-grid" style="margin-bottom:16px">
+        <div class="metric-card">
+          <div class="metric-label">Receita total</div>
+          <div class="metric-value green" id="g-receita">R$ 0</div>
+          <div class="metric-sub">mês selecionado</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Total despesas</div>
+          <div class="metric-value red" id="g-desp-total">R$ 0</div>
+          <div class="metric-sub">todos os grupos</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Saldo líquido</div>
+          <div class="metric-value" id="g-saldo">R$ 0</div>
+          <div class="metric-sub">receita − despesas</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">% comprometido</div>
+          <div class="metric-value" id="g-pct-val">0%</div>
+          <div class="metric-sub">da receita</div>
+        </div>
       </div>
 
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-header"><div class="card-title">Comparação entre meses</div></div>
-        <div id="compare-grid-wrap" style="padding:14px 16px"></div>
-        <div style="padding:8px 16px 14px"><canvas id="chartCompare" style="height:200px"></canvas></div>
+      <!-- PROGRESS -->
+      <div class="progress-wrap">
+        <div class="progress-header">
+          <span class="progress-title">Comprometimento total da receita</span>
+          <span class="progress-pct" id="g-pct">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="g-bar" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="g-bar-spent">R$ 0 comprometidos</span><span id="g-bar-total">de R$ 0</span></div>
       </div>
 
+      <!-- CHARTS ROW 1 -->
       <div class="two-col">
         <div class="card">
-          <div class="card-header"><div class="card-title">Gastos por área</div></div>
-          <div style="height:200px;padding:12px 16px"><canvas id="chartGastos"></canvas></div>
+          <div class="card-header"><div class="card-title">Visão geral — todos os gastos</div></div>
+          <div style="height:240px;padding:12px 16px"><canvas id="chartGastosTudo"></canvas></div>
         </div>
         <div class="card">
-          <div class="card-header"><div class="card-title">Mensal por categoria</div></div>
-          <div style="height:200px;padding:12px 16px"><canvas id="chartCats"></canvas></div>
+          <div class="card-header"><div class="card-title">Despesas fixas + Orb por item</div></div>
+          <div style="height:240px;padding:12px 16px"><canvas id="chartFixasBar"></canvas></div>
         </div>
       </div>
 
+      <!-- CHARTS ROW 2 -->
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Alimentação por categoria</div></div>
+          <div style="height:220px;padding:12px 16px"><canvas id="chartCats"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Comparação entre meses (mercado)</div></div>
+          <div id="compare-grid-wrap" style="padding:12px 16px 4px"></div>
+          <div style="padding:0 16px 14px;height:150px"><canvas id="chartCompare"></canvas></div>
+        </div>
+      </div>
+
+      <!-- FULL SUMMARY TABLE -->
       <div class="card">
-        <div class="card-header"><div class="card-title">Resumo detalhado — mês selecionado</div></div>
+        <div class="card-header"><div class="card-title">Resumo completo do mês</div></div>
         <div id="summary-table"></div>
       </div>
+
     </section>
 
 
@@ -512,15 +550,13 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       </div>
 
       <div class="two-col">
-        <!-- CHART -->
         <div class="card">
           <div class="card-header"><div class="card-title">Distribuição de gastos</div></div>
           <div style="height:220px;padding:12px 16px"><canvas id="chartFin"></canvas></div>
         </div>
-        <!-- INTEGRATION WITH FOOD -->
         <div class="card">
-          <div class="card-header"><div class="card-title">Conexão com alimentação</div></div>
-          <div id="fin-food-summary"></div>
+          <div class="card-header"><div class="card-title">Progresso de pagamentos</div></div>
+          <div style="padding:16px 20px" id="fin-payment-progress"></div>
         </div>
       </div>
 
@@ -1340,65 +1376,152 @@ function delMed(id){ appData.med.splice(appData.med.findIndex(i=>i.id===id),1); 
 
 // ── RENDER GASTOS ──
 function renderGastos() {
-  const keys = sortedMonthKeys();
-  let compareHtml = '<div class="compare-grid">';
-  keys.forEach(k=>{
-    const items = appData.months[k].items;
-    const total = items.reduce((s,i)=>s+i.preco*i.un,0);
-    const spent = items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
-    const isSel = k===currentMonthKey;
-    let diffHtml = '';
-    const idx = keys.indexOf(k);
-    if(idx>0) {
-      const prevSpent = appData.months[keys[idx-1]].items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
-      if(prevSpent>0) {
-        const diff = Math.round((spent-prevSpent)/prevSpent*100);
-        const cls = diff>0?'compare-up':diff<0?'compare-down':'compare-same';
-        diffHtml = `<span class="compare-badge ${cls}">${diff>0?'↑':diff<0?'↓':'→'} ${Math.abs(diff)}% vs anterior</span>`;
-      }
-    }
-    compareHtml += `<div class="compare-card${isSel?' highlight':''}">
-      <div class="compare-month">${monthLabelFull(k)}</div>
-      <div class="compare-val">${fmt(spent)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">de ${fmt(total)} previstos</div>
-      ${diffHtml}
-    </div>`;
-  });
-  compareHtml += '</div>';
-  document.getElementById('compare-grid-wrap').innerHTML = compareHtml;
+  const fin    = appData.fin || {};
+  const selItems = currentMonthItems();
 
-  destroyChart('compare');
-  if(keys.length) {
-    charts.compare = new Chart(document.getElementById('chartCompare'),{
-      type:'bar',
-      data:{labels:keys.map(k=>monthLabel(k)),datasets:[{data:keys.map(k=>appData.months[k].items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0)),backgroundColor:keys.map(k=>k===currentMonthKey?'#1A5FA8':'#B5D4F4'),borderRadius:6,borderWidth:0}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v),font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}},x:{ticks:{font:{size:11}},grid:{display:false}}}}
+  // ── Alimentação ──
+  const mensalTotal  = selItems.reduce((s,i)=>s+i.preco*i.un, 0);
+  const mensalGasto  = selItems.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un, 0);
+  const estoqueTotal = appData.estoque.reduce((s,i)=>s+i.preco*i.un, 0);
+  const medTotal     = appData.med.reduce((s,i)=>s+i.preco, 0);
+
+  // ── Financeiro ──
+  const totalReceita  = (fin.receitas||[]).reduce((s,i)=>s+i.valor, 0);
+  const totalFixas    = (fin.fixas||[]).reduce((s,i)=>s+i.valor, 0);
+  const totalOrb      = (fin.orb||[]).reduce((s,i)=>s+i.valor, 0);
+  const totalVar      = (fin.variaveis||[]).reduce((s,i)=>s+i.valor, 0);
+  const totalDividas  = (fin.dividas||[]).reduce((s,i)=>s+i.parcela, 0);
+
+  // ── Totais ──
+  const totalAlim     = mensalTotal + estoqueTotal + medTotal;
+  const totalDespesas = totalFixas + totalOrb + totalVar + totalDividas + totalAlim;
+  const saldo         = totalReceita - totalDespesas;
+  const pct           = totalReceita > 0 ? Math.min(100, Math.round(totalDespesas/totalReceita*100)) : 0;
+
+  // ── Metrics ──
+  const saldoEl = document.getElementById('g-saldo');
+  document.getElementById('g-receita').textContent    = fmt(totalReceita);
+  document.getElementById('g-desp-total').textContent = fmt(totalDespesas);
+  saldoEl.textContent  = fmt(saldo);
+  saldoEl.className    = 'metric-value ' + (saldo >= 0 ? 'green' : 'red');
+  document.getElementById('g-pct-val').textContent    = pct + '%';
+  document.getElementById('g-pct').textContent        = pct + '%';
+  document.getElementById('g-bar-spent').textContent  = fmt(totalDespesas) + ' comprometidos';
+  document.getElementById('g-bar-total').textContent  = 'de ' + fmt(totalReceita);
+  const bar = document.getElementById('g-bar');
+  bar.style.width  = pct + '%';
+  bar.className    = 'progress-fill' + (pct>90?' danger':pct>70?' warn':'');
+
+  // ── Chart 1: Visão geral tudo ──
+  destroyChart('gastosTudo');
+  const gtLabels = ['🛒 Mercado','📦 Estoque','💊 Medicamentos','🔴 Desp. Fixas','🟠 Orb Design','🔵 Variáveis','⚠️ Dívidas'];
+  const gtVals   = [mensalTotal, estoqueTotal, medTotal, totalFixas, totalOrb, totalVar, totalDividas];
+  const gtColors = ['#1A5FA8','#2A7A3B','#6B3FA0','#B91C1C','#B45309','#0E7490','#7C3AED'];
+  if(gtVals.some(v=>v>0)) {
+    charts.gastosTudo = new Chart(document.getElementById('chartGastosTudo'),{
+      type:'doughnut',
+      data:{labels:gtLabels,datasets:[{data:gtVals,backgroundColor:gtColors,borderWidth:0,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:9,padding:7}},
+          tooltip:{callbacks:{label:ctx=>' '+ctx.label+': '+fmt(ctx.raw)+' ('+Math.round(ctx.raw/totalDespesas*100)+'%)'}}}}
     });
   }
 
-  const selItems = currentMonthItems();
-  const mensalGasto = selItems.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
-  const estoqueTotal = appData.estoque.reduce((s,i)=>s+i.preco*i.un,0);
-  const medTotal = appData.med.reduce((s,i)=>s+i.preco,0);
-  const totalG = mensalGasto+estoqueTotal+medTotal;
-  document.getElementById('g-mensal').textContent=fmt(mensalGasto);
-  document.getElementById('g-estoque').textContent=fmt(estoqueTotal);
-  document.getElementById('g-med').textContent=fmt(medTotal);
-  document.getElementById('g-total').textContent=fmt(totalG);
+  // ── Chart 2: Despesas fixas + orb bar ──
+  destroyChart('fixasBar');
+  const fixasItems = [...(fin.fixas||[]), ...(fin.orb||[])].filter(i=>i.valor>0);
+  if(fixasItems.length) {
+    charts.fixasBar = new Chart(document.getElementById('chartFixasBar'),{
+      type:'bar',
+      data:{
+        labels: fixasItems.map(i=>i.nome.length>18?i.nome.substring(0,16)+'…':i.nome),
+        datasets:[{
+          data: fixasItems.map(i=>i.valor),
+          backgroundColor: fixasItems.map((i,idx)=>idx < (fin.fixas||[]).length ? '#B91C1C' : '#B45309'),
+          borderRadius:5, borderWidth:0
+        }]
+      },
+      options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},
+        scales:{x:{ticks:{callback:v=>'R$'+Math.round(v),font:{size:9}},grid:{color:'rgba(0,0,0,.04)'}},
+                y:{ticks:{font:{size:9}},grid:{display:false}}}}
+    });
+  }
 
-  destroyChart('gastos'); destroyChart('cats');
-  if(totalG>0) charts.gastos=new Chart(document.getElementById('chartGastos'),{type:'doughnut',data:{labels:['Mensal comprado','Estoque','Medicamentos'],datasets:[{data:[mensalGasto,estoqueTotal,medTotal],backgroundColor:['#1A5FA8','#2A7A3B','#B91C1C'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:8,padding:6}}}}});
-
+  // ── Chart 3: Alimentação por categoria ──
+  destroyChart('cats');
   const catGroups={};
   selItems.forEach(it=>{ if(!catGroups[it.cat])catGroups[it.cat]=0; catGroups[it.cat]+=it.preco*it.un; });
-  if(Object.keys(catGroups).length) charts.cats=new Chart(document.getElementById('chartCats'),{type:'bar',data:{labels:Object.keys(catGroups).map(c=>c.replace(/^\S+\s/,'')),datasets:[{data:Object.values(catGroups),backgroundColor:COLORS.slice(0,Object.keys(catGroups).length),borderRadius:6,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v),font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}},x:{ticks:{font:{size:9}},grid:{display:false}}}}});
+  if(Object.keys(catGroups).length) {
+    charts.cats = new Chart(document.getElementById('chartCats'),{
+      type:'bar',
+      data:{labels:Object.keys(catGroups).map(c=>c.replace(/^\S+\s/,'')),
+            datasets:[{data:Object.values(catGroups),backgroundColor:COLORS.slice(0,Object.keys(catGroups).length),borderRadius:5,borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{ticks:{callback:v=>'R$'+Math.round(v),font:{size:9}},grid:{color:'rgba(0,0,0,.04)'}},
+                x:{ticks:{font:{size:9}},grid:{display:false}}}}
+    });
+  }
 
-  let sumHtml='';
-  Object.entries(catGroups).forEach(([cat,val])=>{ sumHtml+=`<div class="summary-row"><span class="summary-label">${cat}</span><span class="summary-val">${fmt(val)}</span></div>`; });
-  sumHtml+=`<div class="summary-row"><span class="summary-label">📦 Estoque</span><span class="summary-val">${fmt(estoqueTotal)}</span></div>`;
-  sumHtml+=`<div class="summary-row"><span class="summary-label">💊 Medicamentos</span><span class="summary-val">${fmt(medTotal)}</span></div>`;
-  sumHtml+=`<div class="summary-row total"><span class="summary-label">Total geral</span><span class="summary-val">${fmt(totalG)}</span></div>`;
-  document.getElementById('summary-table').innerHTML=sumHtml;
+  // ── Chart 4: Comparação entre meses (mercado) ──
+  const keys = sortedMonthKeys();
+  let compareHtml = '<div class="compare-grid" style="margin-bottom:8px">';
+  keys.forEach(k=>{
+    const kItems = appData.months[k].items;
+    const kSpent = kItems.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
+    const isSel  = k===currentMonthKey;
+    const idx    = keys.indexOf(k);
+    let diffHtml = '';
+    if(idx>0){
+      const prev = appData.months[keys[idx-1]].items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
+      if(prev>0){ const d=Math.round((kSpent-prev)/prev*100); diffHtml=`<span class="compare-badge ${d>0?'compare-up':d<0?'compare-down':'compare-same'}">${d>0?'↑':d<0?'↓':'→'}${Math.abs(d)}%</span>`; }
+    }
+    compareHtml += `<div class="compare-card${isSel?' highlight':''}">
+      <div class="compare-month">${monthLabel(k)}</div>
+      <div class="compare-val" style="font-size:16px">${fmt(kSpent)}</div>
+      ${diffHtml}</div>`;
+  });
+  compareHtml += '</div>';
+  document.getElementById('compare-grid-wrap').innerHTML = compareHtml;
+  destroyChart('compare');
+  if(keys.length>1){
+    charts.compare = new Chart(document.getElementById('chartCompare'),{
+      type:'bar',
+      data:{labels:keys.map(k=>monthLabel(k)),
+            datasets:[{data:keys.map(k=>appData.months[k].items.filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0)),
+            backgroundColor:keys.map(k=>k===currentMonthKey?'#1A5FA8':'#B5D4F4'),borderRadius:5,borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{ticks:{callback:v=>'R$'+Math.round(v),font:{size:9}},grid:{color:'rgba(0,0,0,.04)'}},
+                x:{ticks:{font:{size:10}},grid:{display:false}}}}
+    });
+  }
+
+  // ── Full summary table ──
+  let sumHtml = '';
+  // Receitas
+  sumHtml += `<div class="cat-header"><span>💚 Receitas</span><span style="font-weight:500;color:var(--green)">${fmt(totalReceita)}</span></div>`;
+  (fin.receitas||[]).forEach(i=>{ sumHtml+=`<div class="summary-row"><span class="summary-label">${i.nome}</span><span class="summary-val" style="color:var(--green)">${fmt(i.valor)}</span></div>`; });
+  // Despesas fixas
+  sumHtml += `<div class="cat-header"><span>🔴 Despesas Fixas</span><span style="font-weight:500;color:var(--red)">${fmt(totalFixas)}</span></div>`;
+  (fin.fixas||[]).forEach(i=>{ sumHtml+=`<div class="summary-row"><span class="summary-label">${i.nome}</span><span class="summary-val" style="color:var(--red)">${fmt(i.valor)}</span></div>`; });
+  // Orb
+  sumHtml += `<div class="cat-header"><span>🟠 Orb Design</span><span style="font-weight:500;color:var(--amber)">${fmt(totalOrb)}</span></div>`;
+  (fin.orb||[]).forEach(i=>{ sumHtml+=`<div class="summary-row"><span class="summary-label">${i.nome}</span><span class="summary-val" style="color:var(--amber)">${fmt(i.valor)}</span></div>`; });
+  // Dívidas
+  sumHtml += `<div class="cat-header"><span>⚠️ Dívidas (parcela mês)</span><span style="font-weight:500;color:var(--purple)">${fmt(totalDividas)}</span></div>`;
+  (fin.dividas||[]).forEach(i=>{ sumHtml+=`<div class="summary-row"><span class="summary-label">${i.nome}</span><span class="summary-val" style="color:var(--purple)">${fmt(i.parcela)}</span></div>`; });
+  // Variáveis
+  if(totalVar>0){ sumHtml += `<div class="cat-header"><span>🔵 Variáveis</span><span style="font-weight:500;color:var(--blue)">${fmt(totalVar)}</span></div>`;
+    (fin.variaveis||[]).forEach(i=>{ sumHtml+=`<div class="summary-row"><span class="summary-label">${i.nome}</span><span class="summary-val" style="color:var(--blue)">${fmt(i.valor)}</span></div>`; }); }
+  // Alimentação
+  sumHtml += `<div class="cat-header"><span>🛒 Alimentação</span><span style="font-weight:500;color:var(--blue)">${fmt(totalAlim)}</span></div>`;
+  sumHtml += `<div class="summary-row"><span class="summary-label">Mercado (lista do mês)</span><span class="summary-val">${fmt(mensalTotal)}</span></div>`;
+  sumHtml += `<div class="summary-row"><span class="summary-label">📦 Estoque</span><span class="summary-val">${fmt(estoqueTotal)}</span></div>`;
+  sumHtml += `<div class="summary-row"><span class="summary-label">💊 Medicamentos</span><span class="summary-val">${fmt(medTotal)}</span></div>`;
+  // Totais
+  sumHtml += `<div class="summary-row" style="background:var(--red-bg)"><span class="summary-label" style="font-weight:600">Total despesas</span><span class="summary-val" style="color:var(--red)">${fmt(totalDespesas)}</span></div>`;
+  sumHtml += `<div class="summary-row total"><span class="summary-label">Saldo do mês</span><span class="summary-val" style="color:${saldo>=0?'var(--green)':'var(--red)'}">${fmt(saldo)}</span></div>`;
+  document.getElementById('summary-table').innerHTML = sumHtml;
 }
 
 // ── NEW MONTH ──
@@ -1683,15 +1806,68 @@ function renderFinanceiro() {
     });
   }
 
-  // Food integration panel
-  const foodBudget = appData.months[currentMonthKey] ? (appData.months[currentMonthKey].budget||1800) : 1800;
-  const foodSpent  = (appData.months[currentMonthKey]?.items||[]).filter(i=>i.checked).reduce((s,i)=>s+i.preco*i.un,0);
-  const estoqueGasto = appData.estoque.reduce((s,i)=>s+i.preco*i.un,0);
-  document.getElementById('fin-food-summary').innerHTML =
-    '<div class="summary-row"><span class="summary-label">🛒 Orçamento mercado</span><span class="summary-val">' + fmtFin(foodBudget) + '</span></div>' +
-    '<div class="summary-row"><span class="summary-label">🛒 Gasto mercado (mês)</span><span class="summary-val">' + fmtFin(foodSpent) + '</span></div>' +
-    '<div class="summary-row"><span class="summary-label">📦 Investido em estoque</span><span class="summary-val">' + fmtFin(estoqueGasto) + '</span></div>' +
-    '<div class="summary-row total"><span class="summary-label">Total alimentação</span><span class="summary-val">' + fmtFin(foodSpent+estoqueGasto) + '</span></div>';
+
+
+  // ── Payment progress panel ──
+  const paidR = receitas.filter(i=>i.status==='recebido'||i.status==='parcial').reduce((s,i)=>s+i.valor,0);
+  const paidF = fixas.filter(i=>i.status==='pago').reduce((s,i)=>s+i.valor,0);
+  const paidO = orb.filter(i=>i.status==='pago').reduce((s,i)=>s+i.valor,0);
+  const paidV = variaveis.filter(i=>i.status==='pago').reduce((s,i)=>s+i.valor,0);
+  const paidD = dividas.reduce((s,i)=>s+(i.pagas||0)*i.parcela, 0);
+
+  const groups = [
+    { label:'💚 Receitas recebidas',   paid: paidR,   total: totalReceita,                     color:'#2A7A3B' },
+    { label:'🔴 Desp. Fixas pagas',    paid: paidF,   total: totalFixas,                       color:'#B91C1C' },
+    { label:'🟠 Orb Design pagas',     paid: paidO,   total: totalOrb,                         color:'#B45309' },
+    { label:'🔵 Variáveis pagas',      paid: paidV,   total: totalVar,                         color:'#0E7490' },
+    { label:'⚠️ Dívidas — parcelas pagas', paid: paidD, total: dividas.reduce((s,i)=>s+(i.qtd||1)*i.parcela,0), color:'#6B3FA0' },
+  ].filter(g => g.total > 0);
+
+  const totalPaid = paidF + paidO + paidV + paidD;
+  const totalDesp = totalFixas + totalOrb + totalVar + totalDividas;
+  const overallPct = totalDesp > 0 ? Math.min(100, Math.round(totalPaid / totalDesp * 100)) : 0;
+
+  let progressHtml = '';
+
+  // Overall ring summary at top
+  progressHtml += `<div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+    <div style="position:relative;width:72px;height:72px;flex-shrink:0">
+      <svg viewBox="0 0 72 72" style="width:72px;height:72px;transform:rotate(-90deg)">
+        <circle cx="36" cy="36" r="28" fill="none" stroke="var(--border)" stroke-width="8"/>
+        <circle cx="36" cy="36" r="28" fill="none" stroke="${overallPct>=80?'#2A7A3B':overallPct>=50?'#B45309':'#B91C1C'}"
+          stroke-width="8" stroke-linecap="round"
+          stroke-dasharray="${Math.round(2*Math.PI*28)}"
+          stroke-dashoffset="${Math.round(2*Math.PI*28*(1-overallPct/100))}"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-size:14px;font-weight:700;color:var(--text)">${overallPct}%</div>
+    </div>
+    <div>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">Despesas pagas</div>
+      <div style="font-size:12px;color:var(--green);margin-top:2px">${fmtFin(totalPaid)} pagos</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:1px">de ${fmtFin(totalDesp)} total</div>
+    </div>
+  </div>`;
+
+  // Individual progress bars per group
+  groups.forEach(g => {
+    const pct = g.total > 0 ? Math.min(100, Math.round(g.paid / g.total * 100)) : 0;
+    progressHtml += `<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:12px;color:var(--text2)">${g.label}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text3)">${fmtFin(g.paid)} / ${fmtFin(g.total)}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;height:7px;background:var(--bg);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${g.color};border-radius:4px;transition:width .4s ease"></div>
+        </div>
+        <span style="font-size:11px;font-weight:600;min-width:30px;text-align:right;color:${g.color}">${pct}%</span>
+      </div>
+    </div>`;
+  });
+
+  if(!groups.length) progressHtml = '<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px 0">Nenhuma despesa cadastrada ainda.</div>';
+
+  document.getElementById('fin-payment-progress').innerHTML = progressHtml;
 
   // Render lists
   renderFinList('receitas', receitas, 'receita');
@@ -1738,30 +1914,76 @@ function renderFinDividas(dividas) {
     return;
   }
   el.innerHTML = dividas.map(it => {
-    const restantes = (it.qtd||0) - (it.pagas||0);
+    const pagas      = it.pagas || 0;
+    const qtd        = it.qtd   || 1;
+    const restantes  = qtd - pagas;
+    const quitada    = restantes <= 0;
+    const progressPct = Math.min(100, Math.round(pagas / qtd * 100));
     const totalRestante = restantes * it.parcela;
-    const progressPct = it.qtd > 0 ? Math.round((it.pagas/it.qtd)*100) : 0;
-    return `<div class="item-row" style="flex-direction:column;align-items:flex-start;gap:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
-        <div>
-          <div class="item-name">${it.nome}</div>
-          <div style="display:flex;gap:5px;margin-top:3px">${statusBadge(it.status)}
-            <span class="badge badge-gray">${it.pagas||0}/${it.qtd||'?'} parcelas</span>
+    const valorPago     = pagas * it.parcela;
+    const parcelaAtual  = pagas + 1;
+    const barColor = progressPct >= 80 ? '#2A7A3B' : progressPct >= 40 ? '#B45309' : '#B91C1C';
+
+    return `<div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+
+      <!-- Header row -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px">
+        <div style="flex:1;min-width:0">
+          <div class="item-name" style="font-size:14px">${it.nome}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">
+            ${quitada
+              ? '<span class="badge badge-green">✅ Quitada</span>'
+              : `<span class="badge badge-amber">Parcela ${parcelaAtual} de ${qtd}</span>`}
+            <span class="badge badge-gray">${fmtFin(it.parcela)}/mês</span>
           </div>
         </div>
-        <div style="text-align:right">
-          <div class="item-price" style="color:var(--red)">${fmtFin(it.parcela)}<span style="font-size:10px;color:var(--text3)">/mês</span></div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Total restante: ${fmtFin(totalRestante)}</div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${fmtFin(valorPago)}<span style="font-size:10px;font-weight:400;color:var(--text3)"> pagos</span></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px">${fmtFin(totalRestante)} restantes</div>
         </div>
       </div>
-      <div style="width:100%;display:flex;align-items:center;gap:10px">
-        <div class="progress-bar" style="flex:1;height:5px"><div class="progress-fill" style="width:${progressPct}%;background:var(--amber)"></div></div>
-        <span style="font-size:11px;color:var(--text3);white-space:nowrap">${progressPct}% quitado</span>
-        <button class="btn btn-xs btn-edit" onclick="editFinItem('divida',${it.id})">✎</button>
-        <button class="btn btn-xs btn-danger" onclick="delFinItem('dividas',${it.id})">✕</button>
+
+      <!-- Progress bar -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${progressPct}%;background:${barColor};border-radius:4px;transition:width .4s ease"></div>
+        </div>
+        <span style="font-size:12px;font-weight:600;color:${barColor};white-space:nowrap;min-width:36px;text-align:right">${progressPct}%</span>
       </div>
+
+      <!-- Sub-info + actions -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span style="font-size:11px;color:var(--text3)">${pagas}/${qtd} parcelas pagas · Total dívida: ${fmtFin(it.total||it.parcela*qtd)}</span>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          ${!quitada ? `<button class="btn btn-sm" style="background:var(--green-bg);border-color:#86EFAC;color:var(--green);font-weight:600;padding:5px 12px" onclick="pagarParcelaDivida(${it.id})">✓ Pagar parcela</button>` : ''}
+          ${pagas > 0 ? `<button class="btn btn-xs btn-ghost" onclick="desfazerParcelaDivida(${it.id})" title="Desfazer última parcela">↩</button>` : ''}
+          <button class="btn btn-xs btn-edit" onclick="editFinItem('divida',${it.id})">✎</button>
+          <button class="btn btn-xs btn-danger" onclick="delFinItem('dividas',${it.id})">✕</button>
+        </div>
+      </div>
+
     </div>`;
   }).join('');
+}
+
+function pagarParcelaDivida(id) {
+  const it = (appData.fin.dividas||[]).find(i=>i.id===id);
+  if (!it) return;
+  const pagas = (it.pagas||0) + 1;
+  const qtd   = it.qtd || 1;
+  it.pagas    = pagas;
+  it.status   = pagas >= qtd ? 'pago' : 'pendente';
+  saveData();
+  renderFinanceiro();
+}
+
+function desfazerParcelaDivida(id) {
+  const it = (appData.fin.dividas||[]).find(i=>i.id===id);
+  if (!it || !it.pagas) return;
+  it.pagas  = Math.max(0, (it.pagas||0) - 1);
+  it.status = 'pendente';
+  saveData();
+  renderFinanceiro();
 }
 
 function toggleFinStatus(section, id) {
